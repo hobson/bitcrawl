@@ -51,7 +51,7 @@
 	Attribution: Based on code at udacity.com licensed to CC BY-NC-SA
 """
 
-FILENAME='/home/hobs/Notes/notes_repo/bitcoin trend data.json'
+FILENAME='bitpart_historical_data.json'
 
 def parse_args():
 	# TODO: "meta-ize" this by only requiring number format specification in some common format 
@@ -460,6 +460,14 @@ if __name__ == "__main__":
 	# count links at bitcoin.it/Trade (need a better way of counting the businesses that accept bitcoin)
 	links = get_links(max_depth=0,verbose=not o.quiet)
 	
+	try:
+		f = open(o.path,'r+')
+		f.close()
+	except:
+		f = open(o.path,'w')
+		f.write('[\n')  # start a new json array/list
+		f.write("\n]\n") #  terminate array brackets and add an empty line
+		f.close()
 	with open(o.path,'r+') as f: # 'a+' and 'w+' don't work
 		# pointer should be at the end already due to append mode, but it's not,
 		f.seek(0,2)  # go to position 0 relative to 2=EOF (1=current, 0=begin)
@@ -470,7 +478,8 @@ if __name__ == "__main__":
 			#f.seek(-3,2)
 			f.write(",\n") # to allow continuation of the json array/list
 		else:
-			f.write('[\n')  # start a new json array/list
+			f.seek(0,0) # beginning of file
+			f.write('[ \n')  # start a new json array/list
 		import json
 		f.write(json.dumps(dat,indent=2))
 		f.write(",\n") # delimit records/object-instances within an array with commas

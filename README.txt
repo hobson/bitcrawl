@@ -49,6 +49,16 @@ DOCUMENTATION
 -------------
 
 Check out the built-in documentation:
-
+    
     `python bitcrawl.py --help`
+    
+Or the bitbucket wiki:
+    
+    https://bitbucket.org/hobsonlane/bitpart/wiki/
+    
+Or our website (coming soon):
+
+    totalgood.com/bitpart
+    
+Or this README.txt file (but you already know that)
 
