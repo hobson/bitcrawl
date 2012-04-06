@@ -43,6 +43,8 @@
 	4. generalize the search with AI and ML to identify good and bad trends for all common proper names--stock symbols, etc
 	   a) write research paper to prove it does as good a job as a human stock analyst at predicting future price movements
 	   b) write a browser plugin that allows a human to supervise the machine learning and identify useful/relevant quantitative data
+	5. implement the indexer and search engine for the double-star question 3 in CS101 and get quant data directly from the index
+	6. implement the levetshire distance algorithm from the CS101 exam for use in word-stemming and search term similarity estimate
 
 	Author: Hobson Lane dba TotalGood
 	License: GPL v3
@@ -54,7 +56,7 @@ FILENAME='/home/hobs/Notes/notes_repo/bitcoin trend data.json'
 def parse_args():
 	# TODO: "meta-ize" this by only requiring number format specification in some common format 
 	#       like sprintf or the string input functions of C or python, and then convert to a good regex
-	# TODO: add optional units and suffix patterns
+	# TODO: add optional units-of-measure and suffix patterns
 	# TODO: come up with some generalized format that allows you to count links or other stats on a page rather than just extracting a literal value
 
 	URLs={'network': 
@@ -306,7 +308,7 @@ def get_all_links(page):
 # TODO: need to count stats like how many are local and how many unique second and top level domain names there are
 def get_links(url='https://en.bitcoin.it/wiki/Trade',max_depth=1,max_breadth=1e6,max_links=1e6,verbose=False,name=''):
 	import datetime
-	from tg.tz import Local
+	from tz import Local
 	tocrawl = [url]
 	crawled = []
 	depthtocrawl = [0]*len(tocrawl)
@@ -338,7 +340,7 @@ def get_links(url='https://en.bitcoin.it/wiki/Trade',max_depth=1,max_breadth=1e6
 # TODO: set default url if not url
 def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
 	import json, datetime
-	from tg.tz import Local
+	from tz import Local
 	if verbose:
 		print 'Getting REST data from URL "'+url+'" ...'
 	data_str = Bot().GET(url)
@@ -367,7 +369,7 @@ def extract(s='', prefix=r'', regex=r'', suffix=r''):
 # TODO: set default url if not url
 def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose=False):
 	import datetime
-	from tg.tz import Local
+	from tz import Local
 	if verbose:
 		print 'Mining URL "'+url+'" ...'
 	if not url: 
