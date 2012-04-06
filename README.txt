@@ -2,21 +2,30 @@ DEVELOP
 -------
 
 1. Install python
-    Linux: `sudo aptitude install python`
-    Windows: you're on your own
+
+   * Linux: `sudo aptitude install python`
+   * Windows: you're on your own
+   
 2. Install git from 
-    Linux: `sudo aptitude install git`
-    Windows: `http://msysgit.googlecode.com/files/Git-1.7.9-preview20120201.exe`
+
+   * Linux: `sudo aptitude install git`
+   * Windows: `http://msysgit.googlecode.com/files/Git-1.7.9-preview20120201.exe`
+   
 3. Launch a command prompt
-    Linux: <CTRL><ALT>T
-    Windows: Start->Run->"Cmd" in Windows
+
+   * Linux: <CTRL><ALT>T
+   * Windows: Start->Run->"Cmd" in Windows
+   
 4. `cd directory_where_you_want_to_put_the_source_code`
 5. `git clone git@bitbucket.org:hobsonlane/bitpart.git`
 6. hack away
 7. Update your local repository to record your hacking:
-    `git commit -a -m 'Notes about what you changed'`
+
+   `git commit -a -m 'Notes about what you changed'`
+   
 8. Share your changes with the team:
-    `git push -u origin master`
+
+   `git push -u origin master`
 
 INSTALL
 -------
@@ -33,11 +42,11 @@ RUN
 
 From the command line (terminal) prompt type:
 
-python bitcrawl.py --path output_file.json --verbose
+`python bitcrawl.py --path output_file.json --verbose`
 
 
 DOCUMENTATION
 -------------
 
-python bitcrawl.py --help
+`python bitcrawl.py --help`
 
