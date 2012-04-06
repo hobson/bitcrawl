@@ -13,7 +13,10 @@ DEVELOP
 4. `cd directory_where_you_want_to_put_the_source_code`
 5. `git clone git@bitbucket.org:hobsonlane/bitpart.git`
 6. hack away
-7. `git push -u origin master`
+7. Update your local repository to record your hacking:
+    `git commit -a -m 'Notes about what you changed'`
+8. Share your changes with the team:
+    `git push -u origin master`
 
 INSTALL
 -------
