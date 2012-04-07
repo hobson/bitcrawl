@@ -1,48 +1,64 @@
+OVERVIEW
+--------
+
+Bitpart is a contest submittion for the groundbreaking Udacity CS101 online class. See udacity.com for an amazing variety of high quality, university-level online classes. They are short and sweet and highly-educational, even for experienced coders and robotics engineers. The contest rules can be found at:
+
+    
+
+The bitcrawl application crawls the web, mining quantitative information (extracting numbers) associated with a keyword like "bitcoin". Machine learning and natural language processing are used to create quantitative data out of natural language text. Machine learning is used to make sense of the historical data in an attempt to predict future changes in that data (forecasting).
+
 DEVELOP
 -------
 
-1. Install python
-
-   * Linux: `sudo aptitude install python`
-   * Windows: you're on your own
+1. Launch a command prompt
    
-2. Install git from 
-
-   * Linux: `sudo aptitude install git`
-   * Windows: `http://msysgit.googlecode.com/files/Git-1.7.9-preview20120201.exe`
-   
-3. Launch a command prompt
-
    * Linux: <CTRL><ALT>T
    * Windows: Start->Run->"Cmd" in Windows
    
+2. Install python
+   * Linux: `sudo aptitude install python`
+   * Windows: you're on your own
+
+3. Install git
+   
+   * Linux: `sudo aptitude install git`
+   * Windows: `http://code.google.com/p/msysgit/downloads/list?q=full+installer+official+git`
+   
 4. `cd directory_where_you_want_to_put_the_source_code`
 5. `git clone git@bitbucket.org:hobsonlane/bitpart.git`
-6. hack away
-7. Update your local repository to record your hacking:
-
+6. Hack, hack, hack...
+7. Update your local repository to record your hack:
+   
    `git commit -a -m 'Notes about what you changed'`
    
 8. Share your changes with the team:
-
+   
    `git push -u origin master`
+   
 
 INSTALL
 -------
 
 1. Download the latest master zip file https://bitbucket.org/hobsonlane/bitpart/get/master.zip
-Unzip and place all files in the same directory (preferably within a directory listed in your PYTHONPATH variable).
+2. Unzip and place all files in the same directory (preferably within a directory listed in your PYTHONPATH variable).
+3. You may want to edit the FILENAME = ... line in bitcrawl.py to point to an appropriate file/path on your computer:
 
-You may want to edit line 54 in bitcrawl.py default path to point to an appropriate file/path on your computer:
-
-    `FILENAME='/home/hobs/Notes/notes_repo/bitcoin trend data.json'` # change this to point to a path on your computer that you'd like to use to store data
+    `FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json')` # change this to a path you'd like to use to store data
 
 RUN
 ---
 
 From the command line (terminal) prompt type:
 
-    `python bitcrawl.py --path output_file.json --verbose`
+    `python bitcrawl.py`
+
+or
+
+    `python bitcrawl.py --help`
+
+or
+
+    `python bitcrawl.py --path bitpart_historical_data.json --verbose`
 
 
 DOCUMENTATION

@@ -28,10 +28,12 @@
 	Appended json records to "/home/hobs/Notes/notes_repo/bitcoin trend data.json"
 	MtGox price is $4.79240
 	
-	Dependencies:
-		argparse -- ArgumentParser
-		urllib
-		urllib2
+	Standard Module Dependencies:
+		argparse	ArgumentParser
+		urllib  	urlencode, urlopen,...
+		urllib2 	HTTPRedirectHandler, HTTPCookieProcessor, ...
+	Nonstandard Module Dependencies:
+		tz      	Local
 
 	TODO:
 	1. deal with csv: http://www.google.com/trends/?q=bitcoin&ctab=0&geo=us&date=ytd&sort=0 , 
@@ -51,13 +53,20 @@
 	Attribution: Based on code at udacity.com licensed to CC BY-NC-SA
 """
 
-FILENAME='bitpart_historical_data.json'
+import datetime
+from tz import Local
+import os
+
+FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
 def parse_args():
-	# TODO: "meta-ize" this by only requiring number format specification in some common format 
-	#       like sprintf or the string input functions of C or python, and then convert to a good regex
-	# TODO: add optional units-of-measure and suffix patterns
-	# TODO: come up with some generalized format that allows you to count links or other stats on a page rather than just extracting a literal value
+	"""Parse the command line arguments
+
+		TODO:
+			allow user to input a number format and prefix in some form other than python regexes
+			add options or dictionary members to hold patterns for "unit-of-measure" and "suffix"
+			generalize the format to allow user to ask the miner to count links at the url, rather than just extracting a literal value
+	"""
 
 	URLs={'network': 
 			{ 
@@ -135,7 +144,7 @@ def parse_args():
 		type    = str,
 		nargs   = '*',
 		default = URLs,
-		help    = 'URL to scape data from.',
+		help    = 'URL to mine data from.',
 		)
 	p.add_argument(
 		'-p','--prefix',
@@ -155,13 +164,13 @@ def parse_args():
 		'-v','--verbose',
 		action  = 'store_true',
 		default = False,
-		help    = 'Output an progress information.',
+		help    = 'Print out (to stdout) progress messages.',
 		)
 	p.add_argument(
 		'-q','--quiet',
 		action  = 'store_true',
 		default = False,
-		help    = "Don't output anything to stdout, not even the numerical value scraped from the page. Overrides verbose.",
+		help    = "Don't output anything to stdout, not even the numerical values minded. Overrides verbose setting.",
 		)
 	p.add_argument(
 		'-t','--tab',
@@ -198,7 +207,7 @@ def parse_args():
 		)
 	return p.parse_args()
 
-#Historic Trade Data
+#Historic Trade Data available from bitcoincharts and not yet mined:
 #Trade data is available as CSV, delayed by approx. 15 minutes.
 #http://bitcoincharts.com/t/trades.csv?symbol=SYMBOL[&start=UNIXTIME][&end=UNIXTIME]
 #returns CSV:
@@ -215,17 +224,18 @@ def parse_args():
 #There is an experimental telnet streaming interface on TCP port 27007.
 #This service is strictly for personal use. Do not assume this data to be 100% accurate or write trading bots that rely on it.
 
-COOKIEFILE='/home/hobs/tmp/wget_cookies.txt'
-#REFERRERURL='http://google.com'
-#USERAGENT='Mozilla'
-
 #!/usr/bin/env python
 
 import urllib
 import urllib2
 
 class Bot:
-	"""A browser session that follows redirects and maintains cookies."""
+	"""A browser session that follows redirects and maintains cookies.
+	
+	TODO: 
+		allow specification of USER_AGENT, COOKIE_FILE, REFERRER_PAGE
+		if possible should use the get_page() code from the CS101 examples to show "relevance" for the contest
+	"""
 	def __init__(self):
 		self.response    = ''
 		self.params      = ''
@@ -303,12 +313,17 @@ def get_all_links(page):
 			break
 	return links # could use set() to filter out duplicates
 
-# TODO: set default url if not url
-# TODO: tries to browse to weird URLs and bookmarks, e.g. "href=#Printing"
-# TODO: need to count stats like how many are local and how many unique second and top level domain names there are
 def get_links(url='https://en.bitcoin.it/wiki/Trade',max_depth=1,max_breadth=1e6,max_links=1e6,verbose=False,name=''):
-	import datetime
-	from tz import Local
+	""" Return a list of all the urls linked to from a page, exploring the graph to the specified depth.
+	
+		uses the get_page() get_all_links() functions from the early part of CS101, should be updated using more recent CS101 code
+		
+		TODO: 
+			set default url if not url
+			BUG: tries to browse to weird URLs and bookmarks, e.g. "href=#Printing"
+			need to count stats like how many are local and how many unique second and top level domain names there are
+
+	"""
 	tocrawl = [url]
 	crawled = []
 	depthtocrawl = [0]*len(tocrawl)
@@ -339,8 +354,7 @@ def get_links(url='https://en.bitcoin.it/wiki/Trade',max_depth=1,max_breadth=1e6
 
 # TODO: set default url if not url
 def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
-	import json, datetime
-	from tz import Local
+	import json
 	if verbose:
 		print 'Getting REST data from URL "'+url+'" ...'
 	data_str = Bot().GET(url)
@@ -368,8 +382,6 @@ def extract(s='', prefix=r'', regex=r'', suffix=r''):
 
 # TODO: set default url if not url
 def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose=False):
-	import datetime
-	from tz import Local
 	if verbose:
 		print 'Mining URL "'+url+'" ...'
 	if not url: 
@@ -434,9 +446,11 @@ if __name__ == "__main__":
 	# mine raw urls
 	dat = dict()
 	if type(o.urls)==dict:
+		# check to see if all the dictionary keys look like urls
 		if are_all_urls(o.urls):
 			for u,r in o.urls.items():
 				dat[u]=mine_data(url=u, prefixes=r, verbose=not o.quiet)
+		# otherwise assume the new format where each dict key is a name, and 'url' is a key of the nested dict
 		else:
 			for name,r in o.urls.items():
 				dat[name]=mine_data(url=r.pop('url'), prefixes=r, verbose=not o.quiet)
