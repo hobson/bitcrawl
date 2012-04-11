@@ -23,10 +23,19 @@ DEVELOP
    
    * Linux: `sudo aptitude install git`
    * Windows: `http://code.google.com/p/msysgit/downloads/list?q=full+installer+official+git`
+
+3.5 Check git from command line -type >git- help
+
+3.6 Generate SSh key from Git Bash console into your local computers .ssh folder
+
+3.7 copy ssh key form local machine and paste it in the Bitbucket web page accounts- ssh keys list
    
 4. `cd directory_where_you_want_to_put_the_source_code`
+
 5. `git clone git@bitbucket.org:hobsonlane/bitpart.git`
+
 6. Hack, hack, hack...
+
 7. Update your local repository to record your hack:
    
    `git commit -a -m 'Notes about what you changed'`
