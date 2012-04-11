@@ -66,6 +66,10 @@ import os
 import urllib
 import urllib2
 import httplib
+import json
+import pprint
+from argparse import ArgumentParser
+import re
 
 FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
@@ -157,7 +161,6 @@ def parse_args():
 			[r"<tr.*?>BTC/SLL</th.*?>\s*<td.*?'buy'.*?>.*?</td>\s*<td.*?'sell'.*?>",
 			 r'[0-9]{1,6}[.]?[0-9]{0,3}'] },
 		}
-	from argparse import ArgumentParser
 	p = ArgumentParser(description=__doc__.strip())
 	p.add_argument(
 		'-b','--bitfloor','--bf',
@@ -409,7 +412,6 @@ def get_links(url='https://en.bitcoin.it/wiki/Trade',max_depth=1,max_breadth=1e6
 
 # TODO: set default url if not url
 def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
-	import json
 	if verbose:
 		print 'Getting REST data from URL "'+url+'" ...'
 	data_str = Bot().GET(url)
@@ -426,6 +428,16 @@ def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
 		return data
 	return None
 
+def load_json(filename=FILENAME,verbose=False):
+	with open(filename,'r') as f:
+		s = f.read()
+		print s
+		data = json.loads( s )
+		if verbose:
+			pprint.pprint(data)
+		return data
+	return None
+
 # TODO: set default url if not url
 def bitfloor_book(bids=None,asks=None,verbose=False):
 	rest_dict = rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=verbose) 
@@ -434,7 +446,6 @@ def bitfloor_book(bids=None,asks=None,verbose=False):
 def extract(s='', prefix=r'', regex=r'', suffix=r''):
 	# TODO: extract or create a variable name along with extracting the actual numerical value, see tg.nlp
 	# TODO: extract or create a unit of measure string along with extracting the actual numerical value, see tg.nlp
-	import re
 	r = re.compile(r'(?:'+prefix+r')\s*'+r'(?P<quantity>'+regex+r')') # inefficient to compile the regex
 	mo = r.search(s)
 	if mo:
@@ -506,6 +517,9 @@ def are_all_urls(urls):
 if __name__ == "__main__":
 	o = parse_args()
 	
+	print 'Historical data already mined:'
+	data=load_json(filename=o.path,verbose=True)
+
 	# mine raw urls
 	dat = dict()
 	if type(o.urls)==dict:
@@ -521,7 +535,6 @@ if __name__ == "__main__":
 		raise ValueError('Invalid URL, prefix, or regex argument.')
 	
 	if o.verbose:
-		import pprint
 		pprint.pprint(dat)
 	
 	# get bitfloor book data
@@ -557,7 +570,6 @@ if __name__ == "__main__":
 		else:
 			f.seek(0,0) # beginning of file
 			f.write('[ \n')  # start a new json array/list
-		import json
 		f.write(json.dumps(dat,indent=2))
 		f.write(",\n") # delimit records/object-instances within an array with commas
 		f.write(json.dumps(bfdata,indent=2))
