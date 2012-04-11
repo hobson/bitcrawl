@@ -32,8 +32,14 @@
 		argparse	ArgumentParser
 		urllib  	urlencode, urlopen,...
 		urllib2 	HTTPRedirectHandler, HTTPCookieProcessor, ...
+		time    	sleep
+		datetime	now()
+		httplib 	IncompleteRead
 	Nonstandard Module Dependencies:
 		tz      	Local
+
+	BUGS TODO:
+	1. bitfloor book retrieval not working
 
 	TODO:
 	1. deal with csv: http://www.google.com/trends/?q=bitcoin&ctab=0&geo=us&date=ytd&sort=0 , 
@@ -54,8 +60,12 @@
 """
 
 import datetime
+import time
 from tz import Local
 import os
+import urllib
+import urllib2
+import httplib
 
 FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
@@ -96,22 +106,22 @@ def parse_args():
 			'url': 'https://en.bitcoin.it/wiki/Trade',
 			'visits':
 				[r'has\sbeen\saccessed\s',
-				 r'([0-9],)?[0-9]{3},[0-9]{3}'  ] }, 
+				 r'([0-9]{1,3}[,]?){1,4}'  ] }, 
 		'shop': {
 			'url': 'https://en.bitcoin.it/wiki/Real_world_shops',
 			'visits':
 				[r'has\sbeen\saccessed\s',
-				 r'([0-9],)?[0-9]{3},[0-9]{3}'  ] }, 
+				 r'([0-9]{1,3}[,]?){1,4}'  ] }, 
 		'bitcoin': {
 			'url': 'https://en.bitcoin.it/wiki/Main_Page',
 			'visits':
 				[r'has\sbeen\saccessed\s',
-				 r'([0-9],)?[0-9]{3},[0-9]{3}'  ] }, 
+				 r'([0-9]{1,3}[,]?){1,4}'  ] }, 
 		'consultancy': {
 			'url': 'https://bitcoinconsultancy.com/wiki/Main_Page',
 			'visits':
 				[r'has\sbeen\saccessed\s',
-				 r'([0-9],)?[0-9]{3},[0-9]{3}'  ] }, 
+				 r'([0-9]{1,3}[,]?){1,4}'  ] }, 
 		'mtgox':    {
 			'url': 'https://mtgox.com',
 			'average':
@@ -129,6 +139,23 @@ def parse_args():
 			'volume':
 			[r'Volume:<span>',
 			 r'\$[0-9]{1,9}' ] },
+		'virwox': {
+			'url': 'https://www.virwox.com/',
+			'volume':  # 24 hr volume
+			[r"(?s)<fieldset><legend>\s*Trading\s*Volume\s*(SLL)\s*</legend>\s*<table.*?>\s*<tr.*?><td><b>\s*24\s*hours[:]?</b></td><td>", # (?s) = dot matches \n too
+			 r'[0-9,]{1,12}'],
+			'SLLperUSD_ask': 
+			[r"<tr.*?>USD/SLL</th><td.*?'buy'.*?>",
+			 r'[0-9]{1,6}[.]?[0-9]{0,3}'],
+			'SLLperUSD_bid': 
+			[r"<tr.*?>USD/SLL</th.*?>\s*<td.*?'buy'.*?>.*?</td>\s*<td.*?'sell'.*?>",
+			 r'[0-9]{1,6}[.]?[0-9]{0,3}'],
+			'BTCperSLL_ask': 
+			[r"<tr.*?><th.*?>BTC/SLL\s*</th>\s*<td\s*class\s*=\s*'buy'\s*width=\s*'33%'\s*>\s*", # TODO: generalize column/row/element extractors
+			 r'[0-9]{1,6}[.]?[0-9]{0,3}'],
+			'BTCperSLL_bid': 
+			[r"<tr.*?>BTC/SLL</th.*?>\s*<td.*?'buy'.*?>.*?</td>\s*<td.*?'sell'.*?>",
+			 r'[0-9]{1,6}[.]?[0-9]{0,3}'] },
 		}
 	from argparse import ArgumentParser
 	p = ArgumentParser(description=__doc__.strip())
@@ -226,8 +253,7 @@ def parse_args():
 
 #!/usr/bin/env python
 
-import urllib
-import urllib2
+
 
 class Bot:
 	"""A browser session that follows redirects and maintains cookies.
@@ -236,6 +262,9 @@ class Bot:
 		allow specification of USER_AGENT, COOKIE_FILE, REFERRER_PAGE
 		if possible should use the get_page() code from the CS101 examples to show "relevance" for the contest
 	"""
+	
+	# don't wait less than 0.1 s or longer than 1 hr when retrying a network connection
+	
 	def __init__(self):
 		self.response    = ''
 		self.params      = ''
@@ -243,14 +272,32 @@ class Bot:
 		redirecter  = urllib2.HTTPRedirectHandler()
 		cookies     = urllib2.HTTPCookieProcessor()
 		self.opener = urllib2.build_opener(redirecter, cookies)
-#		build_opener creates an object that already handles 404 errors, etc, right?
-#			except urllib2.HTTPError, e:
-#				print "HTTP error: %d" % e.code
-#			except urllib2.URLError, e:
-#				print "Network error: %s" % e.reason.args[1]
-	def GET(self, url):
-		self.response = self.opener.open(url).read()
-		return self.response
+	def GET(self, url,max_retries=10,retry_delay=3):
+		retry_delay = min(max(retry_delay,0.1),3600)
+		datastr = '' # not necessary?
+		try:
+			file_object = self.opener.open(url)
+		# build_opener object doesn't handle 404 errors, etc !!! 
+		except httplib.IncompleteRead, e:
+			print "HTTP read for URL '"+url+"' was incomplete: %d" % e.code
+		except urllib2.HTTPError, e:
+			print "HTTP error for URL '"+url+"': %d" % e.code
+		except urllib2.URLError, e:
+			print "Network error for URL '"+url+"': %s" % e.reason.args[1]
+			# retry
+			if max_retries:
+				print "Waiting "+str(retry_delay)+" seconds before retrying network connection for URL '"+url+"'..."
+				print "Retries left = "+str(max_retries)
+				time.sleep(retry_delay)
+				print "Retrying network connection for URL '"+url+"'."
+				return self.GET(url,max_retries-1)
+			else:
+				print "Exceeded maximum number of Network error retries."
+		try:
+			datastr = file_object.read() # should populate datastr with an empty string if the file_object is invalid, right?
+		except:
+			datastr = ''
+		return datastr
 	def POST(self, url, params):
 		self.url    = url
 		self.params = urllib.urlencode(parameters)
@@ -298,7 +345,7 @@ def wikipedia_view_rates(articles=['Bitcoin','James_Surowiecki'],verbose=False,n
 def wikipedia_view_rate(article='Bitcoin',verbose=False):
 	return mine_data(url='http://stats.grok.se/en/latest/'+article,
 		             prefixes=r'[Hh]as\sbeen\sviewed\s',
-		             regexes=r'[0-9]{1,10}',
+		             regexes=r'[0-9,]{1,12}',
 		             names='view_rate_'+article,
 		             verbose=verbose) 
 
@@ -313,6 +360,14 @@ def get_all_links(page):
 			break
 	return links # could use set() to filter out duplicates
 
+# TODO: compute and return other statistics about the page associated with the page:
+#       1. page length
+#       2. keywords & frequencies (use the CS101 multi-word indexer?)
+#       3. meta data accuracy
+#       4. number of links
+#       5. depth
+#       6. number of broken lengths
+#       7. number of spelling errors and/or some grammar errors (the ones that are easy to detect reliably)
 def get_links(url='https://en.bitcoin.it/wiki/Trade',max_depth=1,max_breadth=1e6,max_links=1e6,verbose=False,name=''):
 	""" Return a list of all the urls linked to from a page, exploring the graph to the specified depth.
 	
@@ -361,14 +416,20 @@ def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
 	dt = datetime.datetime.now(tz=Local)
 	if verbose:
 		print 'Retrieved a '+str(len(data_str))+'-character JSON string at '+ str(dt)
-	dat     = json.loads( data_str )
-	dat['datetime']=str(dt)
-	dat['url']=url
-	return {'bitfloor_book':dat}
+	if len(data_str)>2:
+		data     = json.loads( data_str )
+		data['datetime']=str(dt)
+		data['url']=url
+		data['len']=len(data_str)
+		# this name needs to reflext the URL specified as an input rather than a hard-coded name
+		print data
+		return data
+	return None
 
 # TODO: set default url if not url
-def bitfloor_book(url='https://api.bitfloor.com/book/L2/1',bids=None,asks=None,verbose=False):
-	return rest_json(url=url,verbose=verbose) 
+def bitfloor_book(bids=None,asks=None,verbose=False):
+	rest_dict = rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=verbose) 
+	return {'bitfloor':rest_dict}
 
 def extract(s='', prefix=r'', regex=r'', suffix=r''):
 	# TODO: extract or create a variable name along with extracting the actual numerical value, see tg.nlp
@@ -424,8 +485,10 @@ def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose
 #	elif prefixes and regexes and names and isinstance(prefixes,str) and
 #			isinstance(regexes,str) and isinstance(names,str):
 #		dat[names]=extract(s=page,prefix=prefixes,regex=regexes)
+	elif names and prefixes and regexes and isinstance(prefixes,str) and isinstance(regexes,str) and isinstance(names,str):
+		dat[names]=extract(s=page,prefix=prefixes,regex=regexes)
 	elif prefixes and regexes and isinstance(prefixes,str) and isinstance(regexes,str):
-		dat[name]=extract(s=page,prefix=prefixes,regex=regexes)
+		dat['data']=extract(s=page,prefix=prefixes,regex=regexes)
 	elif isinstance(prefixes,dict):
 		for name,[prefix,regex] in prefixes.items():
 			q=extract(s=page,prefix=prefix,regex=regex)
@@ -462,9 +525,9 @@ if __name__ == "__main__":
 		pprint.pprint(dat)
 	
 	# get bitfloor book data
-	bfdat = bitfloor_book(verbose=not o.quiet)
+	bfdata = bitfloor_book(verbose=not o.quiet)
 	if o.verbose:
-		pprint.pprint(bfdat)
+		pprint.pprint(bfdata)
 
 	# get wikipedia page visit rates
 	wikidat = wikipedia_view_rates(verbose=not o.quiet)
@@ -497,7 +560,7 @@ if __name__ == "__main__":
 		import json
 		f.write(json.dumps(dat,indent=2))
 		f.write(",\n") # delimit records/object-instances within an array with commas
-		f.write(json.dumps(bfdat,indent=2))
+		f.write(json.dumps(bfdata,indent=2))
 		f.write(",\n") # delimit records/object-instances within an array with commas
 		f.write(json.dumps(wikidat,indent=2))
 		f.write(",\n") # delimit records/object-instances within an array with commas
@@ -505,5 +568,8 @@ if __name__ == "__main__":
 		f.write("\n]\n") #  terminate array brackets and add an empty line
 		if not o.quiet:
 			print 'Appended json records to "'+o.path+'"'
-			print 'MtGox price is '+str(dat['mtgox']['average'])
+			try:
+				print 'MtGox price is '+str(dat['mtgox']['average'])
+			except KeyError:
+				print 'Unable to retrieve the MtGox price. Network dropout? Format change at MtGox?'
 
