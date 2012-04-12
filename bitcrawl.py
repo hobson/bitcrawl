@@ -133,24 +133,25 @@ def parse_args():
 		'mtgox':    {
 			'url': 'https://mtgox.com',
 			'average':
-			[r'Weighted Avg:<span>',
+			[r'Weighted\s*Avg\s*:\s*<span>',
 			 r'\$[0-9]{1,2}[.][0-9]{3,6}' ],  
 			'last':
-			[r'Last price:<span>',
+			[r'Last\s*price\s*:\s*<span>',
 			 r'\$[0-9]{1,2}[.][0-9]{3,6}' ],
 			'high':
-			[r'High:<span>',
+			[r'High\s*:\s*<span>',
 			 r'\$[0-9]{1,2}[.][0-9]{3,6}' ],
 			'low':
-			[r'Low:<span>',
+			[r'Low\s*:\s*<span>',
 			 r'\$[0-9]{1,2}[.][0-9]{3,6}' ],
 			'volume':
-			[r'Volume:<span>',
-			 r'\$[0-9]{1,9}' ] },
+			[r'Volume\s*:\s*<span>',
+			 r'[0-9,]{1,9}' ] },
 		'virwox': {
 			'url': 'https://www.virwox.com/',
 			'volume':  # 24 hr volume
-			[r"(?s)<fieldset><legend>\s*Trading\s*Volume\s*(SLL)\s*</legend>\s*<table.*?>\s*<tr.*?><td><b>\s*24\s*hours[:]?</b></td><td>", # (?s) = dot matches \n too
+			# (?s) means to match '\n' with dot ('.*' or '.*?')
+			[r"(?s)<fieldset>\s*<legend>\s*Trading\s*Volume\s*\(SLL\)\s*</legend>\s*<table.*?>\s*<tr.*?>\s*<td>\s*<b>\s*24\s*[Hh]ours\s*[:]?\s*</b>\s*</td>\s*<td>", 
 			 r'[0-9,]{1,12}'],
 			'SLLperUSD_ask': 
 			[r"<tr.*?>USD/SLL</th><td.*?'buy'.*?>",
@@ -164,14 +165,14 @@ def parse_args():
 			'BTCperSLL_bid': 
 			[r"<tr.*?>BTC/SLL</th.*?>\s*<td.*?'buy'.*?>.*?</td>\s*<td.*?'sell'.*?>",
 			 r'[0-9]{1,6}[.]?[0-9]{0,3}'] },
-		'cointron': {
-			'url': 'http://coinotron.com/',
+		'cointron': {  
+			'url': 'http://coinotron.com/coinotron/AccountServlet?action=home', # miner doesn't follow redirects like a browser so must use full URL
 			'hash_rate': 
 			[r'<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*',
 			 r'[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H',
 			 r'</td>'], # unused suffix
 			'miners': 
-			[r'<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H\s*</td><td.*?>',
+			[r'(?s)<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TGM]?H\s*</td>\s*<td.*?>'
 			 r'[0-9]{1,4}\s*[BbMmKk]?',
 			 r'</td>'], # unused suffix
 			'hash_rate_LTC':  # lightcoin
@@ -179,7 +180,7 @@ def parse_args():
 			 r'[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H',
 			 r'</td>'], # unused suffix
 			'miners_LTC': 
-			[r'<tr.*?>\s*<td.*?>\s*LTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H\s*</td><td.*?>',
+			[r'(?s)<tr.*?>\s*<td.*?>\s*LTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TGM]?H\s*</td>\s*<td.*?>',
 			 r'[0-9]{1,4}\s*[BbMmKk]?',
 			 r'</td>'], # unused suffix
 			'hash_rate_SC':  # scamcoin
@@ -187,7 +188,7 @@ def parse_args():
 			 r'[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H',
 			 r'</td>'], # unused suffix
 			'miners_SC': 
-			[r'<tr.*?>\s*<td.*?>\s*SC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H\s*</td><td.*?>',
+			[r'(?s)<tr.*?>\s*<td.*?>\s*SC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TGM]?H\s*</td>\s*<td.*?>',
 			 r'[0-9]{1,4}\s*[BbMmKk]?',
 			 r'</td>'] }, # unused suffix
 		}
@@ -568,16 +569,17 @@ def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose
 			q=extract(s=page,prefix=prefix,regex=regexes[i])
 			if q:
 				dat[name+str(i)]=q
-	elif isinstance(prefixes,list) and isinstance(prefixes[0],list) and len(prefixes[0])==2:
-		for i,[prefix,regex] in enumerate(prefixes):
-			q=extract(s=page,prefix=prefix,regex=regex)
-			if q:
-				dat[name+str(i)]=q
-	elif isinstance(prefixes,list) and isinstance(prefixes[0],list) and len(prefixes[0])==3:
-		for i,[prefix,regex,name] in enumerate(prefixes):
-			q=extract(s=page,prefix=prefix,regex=regex)
-			if q:
-				dat[name]=q
+	elif isinstance(prefixes,list) and isinstance(prefixes[0],list):
+		if len(prefixes[0])==2:
+			for i,[prefix,regex] in enumerate(prefixes):
+				q=extract(s=page,prefix=prefix,regex=regex)
+				if q:
+					dat[name+str(i)]=q
+		elif len(prefixes[0])==3:
+			for i,[prefix,regex,suffix] in enumerate(prefixes):
+				q=extract(s=page,prefix=prefix,regex=regex,suffix=suffix)
+				if q:
+					dat[name+str(i)]=q
 # this condition taken care of by earlier setting name=names
 #	elif prefixes and regexes and names and isinstance(prefixes,str) and
 #			isinstance(regexes,str) and isinstance(names,str):
@@ -622,7 +624,8 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 if __name__ == "__main__":
 	o = parse_args()
 	
-	load_json(filename=o.path,verbose='Historical data already mined:') # verbose means the data will print out
+	if not o.quiet or o.verbose:
+		load_json(filename=o.path,verbose='Historical data already mined:') # verbose means the data will print out with that as the heading
 
 	# mine raw urls
 	d = dict()

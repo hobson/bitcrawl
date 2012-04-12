@@ -1,9 +1,9 @@
 OVERVIEW
 --------
 
-Bitpart is a contest submittion for the groundbreaking Udacity CS101 online class. See udacity.com for an amazing variety of high quality, university-level online classes. They are short and sweet and highly-educational, even for experienced coders and robotics engineers. The contest rules can be found at:
+Bitpart is a contest submission for the Udacity CS101 online class. See Udacity.com for an impressive variety of high quality, university-level online classes. They are short and sweet and highly-educational, even for experienced coders and robotics engineers. The contest rules can be found at:
 
-    
+    http://www.udacity.com/file?file_key=agpzfnVkYWNpdHl1ckYLEgZDb3Vyc2UiBWNzMTAxDAsSCUNvdXJzZVJldiIHZmViMjAxMgwLEgRVbml0GNEPDAsSDEF0dGFjaGVkRmlsZRj54yUM
 
 The bitcrawl application crawls the web, mining quantitative information (extracting numbers) associated with a keyword like "bitcoin". Machine learning and natural language processing are used to create quantitative data out of natural language text. Machine learning is used to make sense of the historical data in an attempt to predict future changes in that data (forecasting).
 
