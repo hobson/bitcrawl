@@ -38,9 +38,12 @@
 	Nonstandard Module Dependencies:
 		tz      	Local
 
-	BUGS TODO:
-	1. bitfloor book retrieval not working
-
+	LOG: (imperfectly duplicates git log)
+	+ 2012/04/11 HL Nat improved README based on his platform setup experience with git, bitbucket, and python for Windows
+	+ 2012/04/11 HL FIXED bitfloor order book REST data retrieval using api.bitfloor
+	+ 2012/04/12 HL added load_json for Alex so he can focus on statistics calculations on the dict of data
+	+ 2012/04/12 HL removed and rewrote the historical_data.json file to be valid because json file had None for some elements in list due to data extraction (regex) bugs
+	
 	TODO:
 	1. deal with csv: http://www.google.com/trends/?q=bitcoin&ctab=0&geo=us&date=ytd&sort=0 , 
 	      <a href='/trends/viz?q=bitcoin&date=ytd&geo=us&graph=all_csv&sort=0&scale=1&sa=N'>
@@ -70,6 +73,7 @@ import json
 import pprint
 from argparse import ArgumentParser
 import re
+from warnings import warn
 
 FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
@@ -90,7 +94,7 @@ def parse_args():
 				 r'[0-9]{1,9}'                               ],  # (...)
 			  'total_btc': # total money supply of BTC
 				[r'<td class="label">Total BTC</td><td>',
-				 r'[0-9]{0,2}[.][0-9]{1,4}[MmKkGgBb]' ], 
+				 r'[0-9]{0,2}[.][0-9]{1,4}[TGMKkBb]' ], 
 			  'difficulty':
 				[r'<td class="label">Difficulty</td><td>',
 				 r'[0-9]{1,10}' ], 
@@ -160,6 +164,32 @@ def parse_args():
 			'BTCperSLL_bid': 
 			[r"<tr.*?>BTC/SLL</th.*?>\s*<td.*?'buy'.*?>.*?</td>\s*<td.*?'sell'.*?>",
 			 r'[0-9]{1,6}[.]?[0-9]{0,3}'] },
+		'cointron': {
+			'url': 'http://coinotron.com/',
+			'hash_rate': 
+			[r'<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*',
+			 r'[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H',
+			 r'</td>'], # unused suffix
+			'miners': 
+			[r'<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H\s*</td><td.*?>',
+			 r'[0-9]{1,4}\s*[BbMmKk]?',
+			 r'</td>'], # unused suffix
+			'hash_rate_LTC':  # lightcoin
+			[r'<tr.*?>\s*<td.*?>\s*LTC\s*</td>\s*<td.*?>\s*',
+			 r'[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H',
+			 r'</td>'], # unused suffix
+			'miners_LTC': 
+			[r'<tr.*?>\s*<td.*?>\s*LTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H\s*</td><td.*?>',
+			 r'[0-9]{1,4}\s*[BbMmKk]?',
+			 r'</td>'], # unused suffix
+			'hash_rate_SC':  # scamcoin
+			[r'<tr.*?>\s*<td.*?>\s*SC\s*</td>\s*<td.*?>\s*',
+			 r'[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H',
+			 r'</td>'], # unused suffix
+			'miners_SC': 
+			[r'<tr.*?>\s*<td.*?>\s*SC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TMG]H\s*</td><td.*?>',
+			 r'[0-9]{1,4}\s*[BbMmKk]?',
+			 r'</td>'] }, # unused suffix
 		}
 	p = ArgumentParser(description=__doc__.strip())
 	p.add_argument(
@@ -424,15 +454,69 @@ def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
 		data['url']=url
 		data['len']=len(data_str)
 		# this name needs to reflext the URL specified as an input rather than a hard-coded name
-		print data
+		if verbose:
+			print data
 		return data
 	return None
 
+def readable(path):
+	try:
+		f = open(o.path,'r')
+		# return f # but this makes readable() just like an f = open(... wrapped in a try
+		f.close()
+		return True
+	except:
+		return False
+
+def updateable(path,initial_content='',min_size=0):
+	if initial_content:
+		min_size = max(min_size,len(initial_content))
+	#TODO: use os.path_exists instead of try
+	if not min_size:
+		try:
+			f = open(o.path,'r+') # w = create the file if it doesn't already exist, truncate to zero length if it does
+		except:
+			return False
+		f.close()
+		return True
+	else:
+		if readable(path): # don't open for writing because that will create and truncate it
+			try:
+				f = open(path,'r+')
+			except:
+				return False
+			f.seek(0,2)  # go to position 0 relative to 2=EOF (1=current, 0=begin)
+			if f.tell()>=min_size:
+				f.close()
+				return True
+			else:
+				f.close()
+				if initial_content:
+					f = open(o.path,'w')
+					f.write(initial_content)
+					f.close()
+					return True
+		else:
+			try:
+				f = open(path,'w')
+			except:
+				return False
+			if initial_content:
+				f = open(o.path,'w')
+				f.write(initial_content)
+			f.close()
+			return True
+		return False
+
 def load_json(filename=FILENAME,verbose=False):
-	with open(filename,'r') as f:
+	if verbose:
+		print 'Loading json data from "'+filename+'"'
+	if readable(filename):
+		f = open(filename,'r')
 		s = f.read()
-		print s
 		data = json.loads( s )
+		if verbose and isinstance(verbose,str):
+			print verbose
 		if verbose:
 			pprint.pprint(data)
 		return data
@@ -469,6 +553,8 @@ def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose
 		name = 'data'
 	if verbose:
 		print 'Retrieved '+str(len(page))+' characters/bytes at '+ str(dt)
+	if not page:
+		return None
 	if (  prefixes and regexes and names and isinstance(prefixes,list) and
 		  isinstance(regexes,list) and isinstance(names,list) and 
 		  len(regexes)==len(prefixes)==len(names) ):
@@ -498,13 +584,25 @@ def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose
 #		dat[names]=extract(s=page,prefix=prefixes,regex=regexes)
 	elif names and prefixes and regexes and isinstance(prefixes,str) and isinstance(regexes,str) and isinstance(names,str):
 		dat[names]=extract(s=page,prefix=prefixes,regex=regexes)
-	elif prefixes and regexes and isinstance(prefixes,str) and isinstance(regexes,str):
+	elif page and prefixes and regexes and isinstance(prefixes,str) and isinstance(regexes,str):
 		dat['data']=extract(s=page,prefix=prefixes,regex=regexes)
 	elif isinstance(prefixes,dict):
-		for name,[prefix,regex] in prefixes.items():
-			q=extract(s=page,prefix=prefix,regex=regex)
-			if q:
+		for name,l in prefixes.items():
+			if len(l)==2:
+				q=extract(s=page,prefix=l[0],regex=l[1])
+			elif len(l)==3:
+				q=extract(s=page,prefix=l[0],regex=l[1],suffix=l[2])
+			else:
+				warn('Invalid data mining regular expression dict format')
+			if q and name:
 				dat[name]=q
+			else:
+				warn('Unsuccessful mining of "'+str(name)+'" <= "'+str(url)+'" with:\n  '+str(l)+'\n')
+				if not q:
+					warn('No numerical data was extracted.')
+				if not name:
+					warn('No name for the numerical data was provided.')
+
 	return dat
 
 def are_all_urls(urls):
@@ -514,74 +612,72 @@ def are_all_urls(urls):
 		return all([ k[0:min(4,len(k))]=='http' for k in urls])
 	return False
 
+def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
+	#return ',\n'.join( [ json.dumps(data,indent=2) for data in data_list ] ) + terminator
+	json_strings = []
+	for data in data_list:
+		json_strings.append(json.dumps(data,indent=2))
+	return prefix + ( ',\n'.join(json_strings) ) + suffix
+
 if __name__ == "__main__":
 	o = parse_args()
 	
-	print 'Historical data already mined:'
-	data=load_json(filename=o.path,verbose=True)
+	load_json(filename=o.path,verbose='Historical data already mined:') # verbose means the data will print out
 
 	# mine raw urls
-	dat = dict()
+	d = dict()
+
 	if type(o.urls)==dict:
+		# TODO: this check and "iterification" of mine_data() should happen inside the function
 		# check to see if all the dictionary keys look like urls
 		if are_all_urls(o.urls):
 			for u,r in o.urls.items():
-				dat[u]=mine_data(url=u, prefixes=r, verbose=not o.quiet)
+				d[u]=mine_data(url=u, prefixes=r, verbose=not o.quiet)
 		# otherwise assume the new format where each dict key is a name, and 'url' is a key of the nested dict
 		else:
 			for name,r in o.urls.items():
-				dat[name]=mine_data(url=r.pop('url'), prefixes=r, verbose=not o.quiet)
+				d[name]=mine_data(url=r.pop('url'), prefixes=r, verbose=not o.quiet)
 	else:
 		raise ValueError('Invalid URL, prefix, or regex argument.')
 	
-	if o.verbose:
-		pprint.pprint(dat)
-	
-	# get bitfloor book data
-	bfdata = bitfloor_book(verbose=not o.quiet)
-	if o.verbose:
-		pprint.pprint(bfdata)
+	data=[ d,
+		   bitfloor_book       (            verbose=not o.quiet),
+		   wikipedia_view_rates(            verbose=not o.quiet),
+		   get_links           (max_depth=0,verbose=not o.quiet)
+		 ]
 
-	# get wikipedia page visit rates
-	wikidat = wikipedia_view_rates(verbose=not o.quiet)
-	if o.verbose:
-		pprint.pprint(wikidat)
+	# compose a json string that can be appended to the end of a list within a json file (prefix = '')
+	json_string = join_json(data,prefix='',suffix='\n]\n') 
 
-	# count links at bitcoin.it/Trade (need a better way of counting the businesses that accept bitcoin)
-	links = get_links(max_depth=0,verbose=not o.quiet)
-	
-	try:
-		f = open(o.path,'r+')
-		f.close()
-	except:
-		f = open(o.path,'w')
-		f.write('[\n')  # start a new json array/list
-		f.write("\n]\n") #  terminate array brackets and add an empty line
-		f.close()
-	with open(o.path,'r+') as f: # 'a+' and 'w+' don't work
+	# TODO: make writable() check for a regex match (for formating and content verificaiton)
+	# TODO: make writable() write the file with acceptable initial content
+	if not updateable(o.path,initial_content='[\n\n]\n'): 
+		print 'ERROR! Unable to log data to "'+o.path+'". Printing to stdout instead...'
+		print json_string 
+		raise RuntimeError('Unable to log data to "'+o.path+'".')
+
+	# see http://stackoverflow.com/a/1466036/623735 for definitions of file modes (write, read, update)
+	#     + = update
+	#    a+ = only allow you to seek and write after the end of the existing data 
+	#    w+ = truncate (delete existing data) before opening and updating/writing with new data
+	#    r+ = leaves existing contents in tact and allows writing, reading, seeking anywhere (random access)
+	with open(o.path,'r+') as f: 
 		# pointer should be at the end already due to append mode, but it's not,
-		f.seek(0,2)  # go to position 0 relative to 2=EOF (1=current, 0=begin)
-		if f.tell()>3:
-			f.seek(-3,2) # if you do this before seek(0,2) on a "a+" or "w+" file you get "[Errno 22] Invalid argument"
-			#terms=f.read()
-			#if terms=='\n]\n':
-			#f.seek(-3,2)
-			f.write(",\n") # to allow continuation of the json array/list
+		f.seek(0,2)  # go to position 0 relative to 2=EOF (1=current, 0=begin), not sure if this is required before the -3 seek
+		f.seek(-3,2) # if you do this before seek(0,2) on a "a+" or "w+" file you get "[Errno 22] Invalid argument"
+		if f.tell()>10: # file isn't empty
+			f.write(',\n') # to allow continuation of the json array/list by overwriting the ']' that terminates the existing list
 		else:
-			f.seek(0,0) # beginning of file
-			f.write('[ \n')  # start a new json array/list
-		f.write(json.dumps(dat,indent=2))
-		f.write(",\n") # delimit records/object-instances within an array with commas
-		f.write(json.dumps(bfdata,indent=2))
-		f.write(",\n") # delimit records/object-instances within an array with commas
-		f.write(json.dumps(wikidat,indent=2))
-		f.write(",\n") # delimit records/object-instances within an array with commas
-		f.write(json.dumps(links,indent=2))
-		f.write("\n]\n") #  terminate array brackets and add an empty line
+			f.write('\n') # to allow continuation of the json array/list by overwriting the ']' that terminates the existing list
+		f.write(json_string)
 		if not o.quiet:
 			print 'Appended json records to "'+o.path+'"'
 			try:
-				print 'MtGox price is '+str(dat['mtgox']['average'])
+				print 'MtGox price is '+str(data[0]['mtgox']['average'])
 			except KeyError:
 				print 'Unable to retrieve the MtGox price. Network dropout? Format change at MtGox?'
+
+	if o.verbose:
+		'New data extracted from web pages...'
+		print json_string
 
