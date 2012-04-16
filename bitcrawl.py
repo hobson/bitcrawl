@@ -344,6 +344,89 @@ def get_page(url):
 	except:
 		return ''
 
+
+QUANT_PATTERNS = dict(
+	# HL: added some less common field/column separators: colon, vertical_bar
+	SEP                  = r'\s*[\s,;\|:]\s*', 
+	DATE_SEP             = r'\s*[\s,;\|\-\:\_\/]\s*',
+	# based on DATE_SEP (with \s !!) ORed with case insensitive connecting words like "to" and "'till"
+	RANGE_SEP            = r"(?i)\s*(?:before|after|then|(?:(?:un)?(?:\')?til)|(?:(?:to)?[\s,;\|\-\:\_\/]{1,2}))\s*", 
+	TIME_SEP             = r'\s*[\s,;\|\-\:\_]\s*',
+	# HL: added sign, spacing, & exponential notation: 1.2E3 or +1.2 e -3
+	FLOAT                = r'[+-]?\d+(?:\.\d+)?(?:\s?[eE]\s?[+-]?\d+)?', 
+	FLOAT_NONEG          =  r'[+]?\d+(?:\.\d+)?(?:\s?[eE]\s?[+-]?\d+)?', 
+	FLOAT_NOSIGN         =      r'\d+(?:\.\d+)?(?:\s?[eE]\s?[+-]?\d+)?', 
+	# HL: got rid of exponential notation with an E and added x10^-4 or *10^23
+	FLOAT_NOE            = r'[+-]?\d+(?:\.\d+)?(?:\s?[xX*]10\s?\^\s?[+-]?\d+)?', 
+    FLOAT_NONEG_NOE      =  r'[+]?\d+(?:\.\d+)?(?:\s?[xX*]10\s?\^\s?[+-]?\d+)?', 
+    FLOAT_NOSIGN_NOE     =      r'\d+(?:\.\d+)?(?:\s?[xX*]10\s?\^\s?[+-]?\d+)?', 
+	# HL: added sign and exponential notation: +1e6 -100 e +3
+	INT                  = r'[+-]?\d+(?:\s?[eE]\s?[+]?\d+)?',
+	INT_NONEG            =  r'[+]?\d+(?:\s?[eE]\s?[+]?\d+)?',
+	INT_NOSIGN           =      r'\d+(?:\s?[eE]\s?[+]?\d+)?', # HL: exponents should always be allowed a sign 
+	INT_NOSIGN_2DIGIT    = r'\d\d',
+	INT_NOSIGN_4DIGIT    = r'\d\d\d\d',
+	INT_NOSIGN_2OR4DIGIT = r'(?:\d\d){1,2}',
+#	DEGREE_SYM           = geopy.format.DEGREE,
+#	PRIME_SYM            = geopy.format.PRIME,
+#	DOUBLE_PRIME_SYM     = geopy.format.DOUBLE_PRIME,
+#	                                 # HL: whitespace equivalent to deg sym as units indicator
+#	DEGREE               =       r'(?:[ ]?['  +geopy.format.DEGREE       +r'd]|[ ]?deg|[ ]?dg|[ ])',
+	# assumes minutes rather than seconds if 'arc' or no other units are given
+#	ARCMIN               = r'(?i)(?:arc)?['   +geopy.format.PRIME        +r"'m](?:(?:in|n|inute)[s]?)?", 
+#	ARCSEC               = r'(?i)(?:arc)?\-?['+geopy.format.DOUBLE_PRIME +r'"s](?:(?:ec|c|econd)[s]?)?',
+	YEAR                 = r'(?i)(?:1[0-9]|2[012]|[1-9])?\d?\d(?:\s?AD|BC)?',  # 2299 BC - 2299 AD, no sign
+	MONTH                = r'[01]\d',   # 01-12
+	DAY         = r'[0-2]\d|3[01]',     # 01-31
+	HOUR        = r'[0-1]\d|2[0-4]',    # 01-24
+#	MONTH                = r'[01]?\d',   # 1-12 and 01-09
+#	DAY         = r'[0-2]?\d|3[01]',    #  1-31 and 01-09
+#	HOUR        = r'[0-1]?\d|2[0-4]',   #  1-24 and 01-09
+	MINUTE      = r'[0-5]\d',           # 00-59
+	SECOND      = r'[0-5]\d(?:\.\d+)?', # 00-59
+	)
+
+DATE_PATTERN = re.compile(r"""
+		(?P<y>%(YEAR)s)%(DATE_SEP)s
+		(?P<mon>%(MONTH)s)%(DATE_SEP)s
+		(?P<d>%(DAY)s)
+""" % QUANT_PATTERNS, re.X)
+
+TIME_PATTERN = re.compile(r"""
+		(?P<h>%(HOUR)s)%(TIME_SEP)s
+		(?P<m>%(MINUTE)s)%(TIME_SEP)s
+		(?P<s>%(SECOND)s) 
+""" % QUANT_PATTERNS, re.X)
+
+DATETIME_PATTERN = re.compile(r'(?P<date>'+DATE_PATTERN.pattern+r')(?:%(DATE_SEP)s)?(?P<time>'+TIME_PATTERN.pattern+r')' % QUANT_PATTERNS, re.X)
+
+def parse_date(s):
+	from datetime import datetime
+	from math import floor
+	
+	mo=DATETIME_PATTERN.match(s)
+	if mo:
+		y = zero_if_none(mo.group('y'))
+		if len(y) == 2:
+			if y[0] == '0':
+				y = int(y) + 2000
+#			else:
+#				y = int(y)
+#				if y > 20 and y < 100:
+#					y = y + 1900
+		y = int(y)
+		mon = int(zero_if_none(mo.group('mon')))
+		d = int(zero_if_none(mo.group('d')))
+		h = int(zero_if_none(mo.group('h')))
+		m = int(zero_if_none(mo.group('m')))
+		s_f = float(zero_if_none(mo.group('s')))
+		s = int(floor(s_f))
+		us = int((s_f-s)*1000000.0)
+		return datetime(y,mon,d,h,m,s,us)
+	else:
+		raise ValueError("Date time string not recognizeable or not within a valid date range (2199 BC to 2199 AD): %s" % s)
+
+
 def get_next_target(page):
 	start_link = page.find('<a href=')
 	if start_link == -1: 
@@ -462,7 +545,7 @@ def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
 
 def readable(path):
 	try:
-		f = open(o.path,'r')
+		f = open(path,'r')
 		# return f # but this makes readable() just like an f = open(... wrapped in a try
 		f.close()
 		return True
@@ -510,11 +593,12 @@ def updateable(path,initial_content='',min_size=0):
 		return False
 
 def load_json(filename=FILENAME,verbose=False):
-	if verbose:
-		print 'Loading json data from "'+filename+'"'
+	if verbose:  print 'Loading json data from "'+filename+'"'
 	if readable(filename):
+		if verbose:  print 'File exists and is readable: "'+filename+'"'
 		f = open(filename,'r')
 		s = f.read()
+		if verbose:  print 'Read '+str(len(s))+' characters.'
 		data = json.loads( s )
 		if verbose and isinstance(verbose,str):
 			print verbose
