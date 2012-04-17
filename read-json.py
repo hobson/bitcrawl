@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 import json
 from pprint import pprint
@@ -74,3 +75,5 @@ def var(listoflist):# assuming equal datetime intervals
 
 
 
+=======
+>>>>>>> 945b40cc4be200f86e0d7a3b328ddc64a2461189
