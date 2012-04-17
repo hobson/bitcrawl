@@ -45,7 +45,7 @@ from argparse import ArgumentParser
 import re
 from warnings import warn
 
-FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
+FILENAME=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
 # Hard-coded regular expressions, keywords, and URLs for gleaning numerical data from the web
 URLs={'network': 
@@ -155,9 +155,14 @@ URLs={'network':
 		 r'</td>'] }, # unused suffix
 	}
 
-def get_seeds(path='data/bitsites.txt')
+def get_seeds(path='data/bitsites.txt'):
+	"""Read in seed urls from a flatfile (newline delimitted)
+	
+	>>> print len(get_seeds())
+	68
+	"""
 	try: 
-		f = open('bitsites.txt')
+		f = open(path,'r')
 	except:
 		print 'Unable to find the file "'+path+'".'
 		return []
@@ -232,6 +237,11 @@ class Bot:
 		return self.response
 
 def get_page(url):
+	"""Retrieve a webpage from the given url (don't follow redirects or use cookies, though)
+	
+	>>> print 1000 < len(get_page('http://google.com')) < 1E7
+	True
+	"""
 	try:
 		return urllib.urlopen(url).read()
 	except:
@@ -283,7 +293,12 @@ TIME_PATTERN = re.compile(r"""
 DATETIME_PATTERN = re.compile(r'(?P<date>'+DATE_PATTERN.pattern+r')(?:%(DATE_SEP)s)?(?P<time>'+TIME_PATTERN.pattern+r')' % QUANT_PATTERNS, re.X)
 
 def parse_date(s):
-	"""Uses complicated nested regular expressions to proces date-time strings and doesn't work!"""
+	"""Uses complicated nested regular expressions to proces date-time strings and doesn't work!
+	
+	# Fails!
+	# >>> print parse_date('2012-04-20 23:59:00')
+	# (2012, 4, 20, 23, 59, 0)
+	"""
 	from datetime import datetime
 	from math import floor
 	
@@ -310,6 +325,11 @@ def parse_date(s):
 		raise ValueError("Date time string not recognizeable or not within a valid date range (2199 BC to 2199 AD): %s" % s)
 
 def get_next_target(page):
+	"""Extract a URL from a string (HTML for a webpage)
+	
+	>>> print get_next_target('hello <a href="world">.</a>')
+	('world', 20)
+	"""
 	start_link = page.find('<a href=')
 	if start_link == -1: 
 		return None, 0
@@ -516,7 +536,7 @@ def test_read_json():
 	#run it for a sample key 'mtgox' to get its datetime and average intoa list of list
 	listoflist = bycol_key(data, key='mtgox', y='average')
 	assert len(listoflist)>10
-	foreach l in listoflist:
+	for l in listoflist:
 		assert l[0]>73400
 		assert l[1]>0.1 and l[2]<25.0
 		assert len(l)==2
@@ -636,65 +656,5 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 	return prefix + ( ',\n'.join(json_strings) ) + suffix
 
 if __name__ == "__main__":
-	o = parse_args()
-	
-	if not o.quiet or o.verbose:
-		load_json(filename=o.path,verbose='Historical data already mined:') # verbose means the data will print out with that as the heading
-
-	# mine raw urls
-	d = dict()
-
-	if type(o.urls)==dict:
-		# TODO: this check and "iterification" of mine_data() should happen inside the function
-		# check to see if all the dictionary keys look like urls
-		if are_all_urls(o.urls):
-			for u,r in o.urls.items():
-				d[u]=mine_data(url=u, prefixes=r, verbose=not o.quiet)
-		# otherwise assume the new format where each dict key is a name, and 'url' is a key of the nested dict
-		else:
-			for name,r in o.urls.items():
-				d[name]=mine_data(url=r.pop('url'), prefixes=r, verbose=not o.quiet)
-	else:
-		raise ValueError('Invalid URL, prefix, or regex argument.')
-	
-	data=[ d,
-		   bitfloor_book       (            verbose=not o.quiet),
-		   wikipedia_view_rates(            verbose=not o.quiet),
-		   get_links           (max_depth=0,verbose=not o.quiet)
-		 ]
-
-	# compose a json string that can be appended to the end of a list within a json file (prefix = '')
-	json_string = join_json(data,prefix='',suffix='\n]\n') 
-
-	# TODO: make writable() check for a regex match (for formating and content verificaiton)
-	# TODO: make writable() write the file with acceptable initial content
-	if not updateable(o.path,initial_content='[\n\n]\n'): 
-		print 'ERROR! Unable to log data to "'+o.path+'". Printing to stdout instead...'
-		print json_string 
-		raise RuntimeError('Unable to log data to "'+o.path+'".')
-
-	# see http://stackoverflow.com/a/1466036/623735 for definitions of file modes (write, read, update)
-	#     + = update
-	#    a+ = only allow you to seek and write after the end of the existing data 
-	#    w+ = truncate (delete existing data) before opening and updating/writing with new data
-	#    r+ = leaves existing contents in tact and allows writing, reading, seeking anywhere (random access)
-	with open(o.path,'r+') as f: 
-		# pointer should be at the end already due to append mode, but it's not,
-		f.seek(0,2)  # go to position 0 relative to 2=EOF (1=current, 0=begin), not sure if this is required before the -3 seek
-		f.seek(-3,2) # if you do this before seek(0,2) on a "a+" or "w+" file you get "[Errno 22] Invalid argument"
-		if f.tell()>10: # file isn't empty
-			f.write(',\n') # to allow continuation of the json array/list by overwriting the ']' that terminates the existing list
-		else:
-			f.write('\n') # to allow continuation of the json array/list by overwriting the ']' that terminates the existing list
-		f.write(json_string)
-		if not o.quiet:
-			print 'Appended json records to "'+o.path+'"'
-			try:
-				print 'MtGox price is '+str(data[0]['mtgox']['average'])
-			except KeyError:
-				print 'Unable to retrieve the MtGox price. Network dropout? Format change at MtGox?'
-
-	if o.verbose:
-		'New data extracted from web pages...'
-		print json_string
-
+	import doctest
+	doctest.testmod(verbose=True)

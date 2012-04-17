@@ -142,7 +142,7 @@ def parse_args():
 		'-f','--path','--filename',
 		type    = str,
 		#nargs  = '*', # other options '*','+', 2
-		default = FILENAME,
+		default = bc.FILENAME,
 		help    = 'File to append the numerical data to (after converting to a string).',
 		)
 	return p.parse_args()
@@ -151,15 +151,14 @@ if __name__ == "__main__":
 	o = parse_args()
 	
 	if not o.quiet or o.verbose:
-		load_json(filename=o.path,verbose='Historical data already mined:') # verbose means the data will print out with that as the heading
+		bc.load_json(filename=o.path,verbose='Historical data already mined:') # verbose means the data will print out with that as the heading
 
-	# mine raw urls
+	# mine hard-coded urls
 	d = dict()
-
 	if type(o.urls)==dict:
 		# TODO: this check and "iterification" of mine_data() should happen inside the function
 		# check to see if all the dictionary keys look like urls
-		if are_all_urls(o.urls):
+		if bc.are_all_urls(o.urls):
 			for u,r in o.urls.items():
 				d[u]=bc.mine_data(url=u, prefixes=r, verbose=not o.quiet)
 		# otherwise assume the new format where each dict key is a name, and 'url' is a key of the nested dict
@@ -176,7 +175,7 @@ if __name__ == "__main__":
 		 ]
 
 	# compose a json string that can be appended to the end of a list within a json file (prefix = '')
-	json_string = join_json(data,prefix='',suffix='\n]\n') 
+	json_string = bc.join_json(data,prefix='',suffix='\n]\n') 
 
 	# TODO: make writable() check for a regex match (for formating and content verificaiton)
 	# TODO: make writable() write the file with acceptable initial content
@@ -185,6 +184,7 @@ if __name__ == "__main__":
 		print json_string 
 		raise RuntimeError('Unable to log data to "'+o.path+'".')
 
+	# TODO: create a function in bitcrawl module for appending new json data to existing data, as this block does
 	# see http://stackoverflow.com/a/1466036/623735 for definitions of file modes (write, read, update)
 	#     + = update
 	#    a+ = only allow you to seek and write after the end of the existing data 
