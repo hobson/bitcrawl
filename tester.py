@@ -7,7 +7,7 @@ def test_load():
 	
 	Convert to list(list()), print, and return
 	"""
-	data=load_json(filename='bitcrawl_historical_data.json',verbose=True)
+	data=load_json(filename='data/bitcrawl_historical_data.json',verbose=False)
 	if not data: return data
 	
 	columns=[]
@@ -40,7 +40,7 @@ def plot_data(columns= [ [] ] ):
 columns = test_plot()
 
 def test_regex():
-	f=open('test_pages/virwox.html')
+	f=open('data/pages/virwox.html')
 	s=f.read()
 	import re
 	r=re.compile(r"<tr.*?>USD/SLL</th.*?><td.*?'buy'.*?>[0-9]{1,6}[.]?[0-9]{0,3}")
@@ -51,26 +51,26 @@ def test_regex():
 	mo = r.search(s)
 	print s[mo.span()[0]:mo.span()[1]]
 
-	f=open('test_pages/consultancy.html')
+	f=open('data/pages/consultancy.html')
 	s=f.read()
 	r=re.compile(r'has\sbeen\saccessed\s([0-9]{1,3}[,]?){1,4}')
 	mo = r.search(s)
 	print s[mo.span()[0]:mo.span()[1]]
 
 
-	f=open('test_pages/mtgox.html')
+	f=open('data/pages/mtgox.html')
 	s=f.read()
 	r=re.compile(r'Volume\s*:\s*<span>\s*'+r'[0-9]{1,9}')
 	mo = r.search(s)
 	print s[mo.span()[0]:mo.span()[1]]
 
-	f=open('test_pages/coinotron.html')
+	f=open('data/pages/coinotron.html')
 	s=f.read()
 	r=re.compile(r'(?s)<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*[0-9]{1,3}[.][0-9]{1,4}\s*[TGM]?H\s*</td>\s*<td.*?>'+r'[0-9]{1,4}\s*[BbMmKk]?')
 	mo = r.search(s)
 	print s[mo.span()[0]:mo.span()[1]]
 
-	f=open('test_pages/coinotron.html')
+	f=open('data/pages/coinotron.html')
 	s=f.read()
 	r=re.compile(r'<tr.*?>\s*<td.*?>\s*BTC\s*</td>\s*<td.*?>\s*')
 	mo = r.search(s)

@@ -77,6 +77,15 @@ from warnings import warn
 
 FILENAME=os.path.expanduser('~/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
+def get_seeds(path='data/bitsites.txt')
+	try: 
+		f = open('bitsites.txt')
+	except:
+		print 'Unable to find the file "'+path+'".'
+		return []
+	s = f.read()
+	return s.split('\n') # FIXME: what about '\r\n' in Windows
+
 def parse_args():
 	"""Parse the command line arguments
 
