@@ -49,8 +49,28 @@ listoflist = bycol_key(data,'mtgox')
 pprint(listoflist)
 #[[734608.0348032408, 4.95759]]
 
-#prints for mtgox the datetime key is returned with a u in front of strings like key names, but not before numbers
-#-why? answer:- u indicates Unicode formatted strings returned by json decoder
+#1--get next run of bitcrawl.py and the new corresponding
+#bitcrawl_historical_data.json file in the readable path of json_data.open()
+#how to do thus using python?
+
+#2--append next datetime and corresponding average from the json file to the listoflist by calling bycol_key def
+#listoflist = bycol_key(data,'mtgox')
+
+#3--pass the lsit of lists to the var def
+def var(listoflist):# assuming equal datetime intervals
+    averagelist=[]
+    variance =0
+    for element in listoflist:
+        averagelist.append(element[1])# appends average value from listoflist
+    meanavg = mean(averagelist)#mean of the list containing all the 'average' data
+    for e in averagelist:
+        variance = variance + (e - meanavg)**2
+    variance = variance/len(averagelist)
+
+#4--my approach for unequal datetime intervals ,
+#--a)create a uniform datetime interval of may be day
+#--b)and for each datetime if no corresponding 'average' value is found or
+#is not available just assign the last known 'average' value to that datetime?
 
 
 
