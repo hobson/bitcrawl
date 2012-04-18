@@ -501,27 +501,29 @@ def updateable(path,initial_content='',min_size=0):
 			return True
 		return False
 
-def bycol_key(data, key='mtgox', x='datetime', y='average'):#function for returning values given a key of the dictionary data
+def bycol_key(data, name='mtgox', y='average', x='datetime'):#function for returning values given a key of the dictionary data
     columns =[]
-    for record in data:#index loops thru each data item which are dictionaries
-        #for all keys like mtgox use -- for key in keylist
-        if key in record.keys():
-            keyrecord = record[key]  
-            #print 'keyrecord=',keyrecord
+    # loops thru each data item in the list
+    for record in data:
+        # if this record (dict) contains the named key ('mtgox')
+        if name in record.keys():
+            keyrecord = record[name]
+            print 'keyrecord=',keyrecord
             columns.append([])# add an empty row
-            if x in keyrecord.keys():
-            # add the time to the empty row
-            # leave it as a string and I'll convert to a value
-                dt = datetime.datetime.strptime(keyrecord['datetime'][0:-6],"%Y-%m-%d %H:%M:%S.%f")
+            # is the requested x data name in the dictionary for the record?
+            if x in keyrecord:
+            	# add the time to the empty row
+            	# leave it as a string and I'll convert to a value
+                dt = datetime.datetime.strptime(keyrecord[x][0:-6],"%Y-%m-%d %H:%M:%S.%f")
                 dt_value = float(dt.toordinal())+dt.hour/24.+dt.minute/24./60.+dt.second/24./3600.
                 columns[-1].append(dt_value)
             if y in keyrecord.keys():
-                # float() won't work if there's a dollar sign in the price
-                value = float(keyrecord['average'].strip().strip('$').strip())
+                # float() won't work if there's a dollar sign in the value/price, so get rid of it
+                value = float(keyrecord[y].strip().strip('$').strip())
                 # add the value to the last row
                 columns[-1].append(value)
-        #pprint(columns,indent=2)       
-        return columns
+        #pprint.pprint(columns,indent=2)
+    return columns
 
 def transpose_lists(lists):
 	"""Transpose a list of lists
@@ -567,14 +569,15 @@ def test_read_json():
 	#keylist is the list of keys from the list of dictionaries
 	print keylist
 	
+	print data
 	#run it for a sample key 'mtgox' to get its datetime and average intoa list of list
 	listoflist = bycol_key(data, key='mtgox', y='average')
+	#[[734608.0348032408, 4.95759]]
 	assert len(listoflist)>10
 	for l in listoflist:
 		assert l[0]>73400
 		assert l[1]>0.1 and l[2]<25.0
 		assert len(l)==2
-	#[[734608.0348032408, 4.95759]]
 
 def load_json(filename=FILENAME,verbose=False):
 	if verbose:  print 'Loading json data from "'+filename+'"'
