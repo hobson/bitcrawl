@@ -1,18 +1,20 @@
 #!/usr/bin/python
-"""Module for crawling the web, extracting numbers, counting links and other statistics
+"""Module for crawling the web, extracting numbers, counting links and other stats
 
-	Calculates statistics and plots 2-D plots.
+	Calculates statistics of the data gathered and plots 2-D plots.
 	
 	Standard Module Dependencies:
 		argparse	ArgumentParser
 		urllib  	urlencode, urlopen,...
-		urllib2 	HTTPRedirectHandler, HTTPCookieProcessor, ...
+		urllib2 	HTTPRedirectHandler, HTTPCookieProcessor, etc
 		time    	sleep
-		datetime	now()
+		datetime	now(), datetime.strptime(), datetime.datetime(), etc
 		httplib 	IncompleteRead
+		numpy   	
+		matplotlib	plot
 
 	Nonstandard Module Dependencies:
-		tz      	Local
+		tz      	Local # local time zone object definition
 
 	TODO:
 	1. deal with csv: http://www.google.com/trends/?q=bitcoin&ctab=0&geo=us&date=ytd&sort=0 , 
@@ -29,9 +31,13 @@
 
 	::Author: Hobson Lane, Alex Gagnon, Nataraj
 	::License: CC BY-NC-SA
-	::Attribution: Utilizes code from udacity.com licensed under CC BY-NC-SA
+	::Attribution: Utilizes code from Udacity.com licensed under CC BY-NC-SA
 """
 
+# TODO: smart import by wrapping all import statements in try: blocks
+# TODO: smarter import with gracefull fallback to "pass" or simple local implementations for unavailable modules
+# TODO: smartest import with pip install (setup.py install) of missing modules, if possible
+# TODO: ai import with automatic, on-the-fly, python source code generation... with comments and docstrings! ;)
 import datetime
 import time
 from tz import Local
@@ -44,6 +50,8 @@ import pprint
 from argparse import ArgumentParser
 import re
 from warnings import warn
+import numpy as np
+import matplotlib.pyplot as plt
 
 FILENAME=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
@@ -522,7 +530,7 @@ def test_read_json():
 	import datetime
 
 	#data is a list of dictionaries obtained from the json file
-	data = load_json('bitcrawl_historical_data.json')
+	data = load_json()
 
 	#now creating a keylist
 	keylist = []
@@ -654,6 +662,20 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 	for data in data_list:
 		json_strings.append(json.dumps(data,indent=2))
 	return prefix + ( ',\n'.join(json_strings) ) + suffix
+
+def plot_data(columns=None):
+	if not columns:
+		columns = load_json()
+	elif isinstance(columns, str):
+		columns = test_load(path=columns)
+	plt.plot(columns)
+	plt.show()
+
+# plt.plot('yourdata') plots your data, plt.show() displays the figure.
+# Json data needs to be transposed.
+# plt.xlabel('some text') = adds label on x axis
+# plt.ylabel('some text') = adds label on y axis
+# plt.title('Title') = adds title
 
 if __name__ == "__main__":
 	import doctest
