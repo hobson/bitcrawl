@@ -11,7 +11,7 @@
 		datetime	now(), datetime.strptime(), datetime.datetime(), etc
 		httplib 	IncompleteRead
 		numpy   	
-		matplotlib	plot
+		matplotlib	pyplot.plot
 
 	Nonstandard Module Dependencies:
 		tz      	Local # local time zone object definition
@@ -29,9 +29,8 @@
 	5. implement the indexer and search engine for the double-star question 3 in CS101 and get quant data directly from the index
 	6. implement the levetshire distance algorithm from the CS101 exam for use in word-stemming and search term similarity estimate
 
-	::Author: Hobson Lane, Alex Gagnon, Nataraj
-	::License: CC BY-NC-SA
-	::Attribution: Utilizes code from Udacity.com licensed under CC BY-NC-SA
+	:copyright: 2012 by Hobson Lane (hobson@totalgood.com), see AUTHORS for details
+	:license:   Creative Commons BY-NC-SA, see LICENSE for more details
 """
 
 # TODO: smart import by wrapping all import statements in try: blocks
@@ -524,6 +523,33 @@ def bycol_key(data, key='mtgox', x='datetime', y='average'):#function for return
         #pprint(columns,indent=2)       
         return columns
 
+def transpose_lists(lists):
+	"""Transpose a list of lists
+	
+	>>> print transpose_lists([[1, 2, 3], [4, 5, 6]])
+	[[1, 4], [2, 5], [3, 6]]
+	"""
+	
+	N,M = len(lists),len(lists[0])
+	
+	# create empty lists
+	result = []
+	for n in range(M):
+		result.append([])
+	
+	# put the rows in the columns
+	for n,l in enumerate(lists):
+		for m,el in enumerate(l):
+			result[m].append(el)
+	
+	return result
+		
+def byrow_key(data, key='mtgox', x='datetime', y='average'):#function for returning values given a key of the dictionary data
+	cols = bycol_key(data, key, x, y)
+	rows=transpose_lists(cols)
+	return columns
+
+
 def test_read_json():
 	import json
 	from pprint import pprint
@@ -664,12 +690,25 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 	return prefix + ( ',\n'.join(json_strings) ) + suffix
 
 def plot_data(columns=None):
+	"""Plot 2-D points in first to columns in a list of lists
+	
+	>>> plot_data([[1,1],[2,4],[3,9]])
+	[[1, 2, 3], [1, 4, 9]] 
+	"""
 	if not columns:
-		columns = load_json()
+		#columns = bycol_key(load_json(),'mtgox','datetime','average')
+		columns = bycol_key(load_json())
 	elif isinstance(columns, str):
-		columns = test_load(path=columns)
-	plt.plot(columns)
+		columns = bycol_key(load_json(path=columns))
+	print columns
+	rows = transpose_lists(columns)
+	print rows
+	plt.plot(rows[0],rows[1])
 	plt.show()
+	#if result[0:11] == str('[<matplotlib.lines.Line2D at 0xb01a66c>]')[0:11]:
+	#	return rows,result,result2
+	return rows
+	return None
 
 # plt.plot('yourdata') plots your data, plt.show() displays the figure.
 # Json data needs to be transposed.

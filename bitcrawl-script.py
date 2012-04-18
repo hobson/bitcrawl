@@ -53,10 +53,8 @@
 	5. implement the indexer and search engine for the double-star question 3 in CS101 and get quant data directly from the index
 	6. implement the levetshire distance algorithm from the CS101 exam for use in word-stemming and search term similarity estimate
 
-	::Author: Hobson Lane, Alex Gagnon, and Nataraj
-	::License: CC BY-NC-SA
-	::Attribution: Based Udacity.com code licensed under CC BY-NC-SA
-"""
+	:copyright: 2012 by Hobson Lane (hobson@totalgood.com), see AUTHORS for details
+	:license:   Creative Commons BY-NC-SA, see LICENSE for more details"""
 
 import bitcrawl as bc
 from argparse import ArgumentParser
