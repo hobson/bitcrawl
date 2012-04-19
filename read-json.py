@@ -1,8 +1,9 @@
-<<<<<<< HEAD
+
 
 import json
 from pprint import pprint
 import datetime
+import numpy
 
 json_data=open('bitcrawl_historical_data.json')
 
@@ -43,37 +44,53 @@ def bycol_key(data, key):#function for returning values given a key of the dicti
                 # add the value to the last row
                 columns[-1].append(value)
         #pprint(columns,indent=2)       
-        return columns
+    return columns
 
 #run it for a sample key 'mtgox' to get its datetime and average intoa list of list
 listoflist = bycol_key(data,'mtgox')
 pprint(listoflist)
 #[[734608.0348032408, 4.95759]]
 
-#1--get next run of bitcrawl.py and the new corresponding
-#bitcrawl_historical_data.json file in the readable path of json_data.open()
-#how to do thus using python?
 
-#2--append next datetime and corresponding average from the json file to the listoflist by calling bycol_key def
-#listoflist = bycol_key(data,'mtgox')
-
-#3--pass the lsit of lists to the var def
+#--pass the lsit of lists to the var def
 def var(listoflist):# assuming equal datetime intervals
     averagelist=[]
     variance =0
     for element in listoflist:
+        #print 'element=',element
+        #print 'element[1]=',element[1]
         averagelist.append(element[1])# appends average value from listoflist
-    meanavg = mean(averagelist)#mean of the list containing all the 'average' data
+    sumlist = sum(averagelist)
+    meanavg = sumlist/len(averagelist)#mean of the list containing all the 'average' data
+    print'meanavg=',meanavg
     for e in averagelist:
         variance = variance + (e - meanavg)**2
     variance = variance/len(averagelist)
+    return variance
 
-#4--my approach for unequal datetime intervals ,
+resultvariance = var(listoflist)
+print 'variance=',resultvariance
+#variance= 0.00124116130988
+
+def varusingnumpy(listoflist):
+    averagelist=[]
+    variance =0
+    for element in listoflist:
+        print 'element=',element
+        print 'element[1]=',element[1]
+        averagelist.append(element[1])
+    variance=numpy.var(averagelist) #check numpy usage syntax
+    return variance
+
+numpyvar = varusingnumpy(listoflist)
+print'numpyvar=', numpyvar
+    
+    
+
+#--my approach for unequal datetime intervals ,
 #--a)create a uniform datetime interval of may be day
 #--b)and for each datetime if no corresponding 'average' value is found or
 #is not available just assign the last known 'average' value to that datetime?
 
 
 
-=======
->>>>>>> 945b40cc4be200f86e0d7a3b328ddc64a2461189
