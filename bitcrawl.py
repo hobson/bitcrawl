@@ -1,18 +1,20 @@
 #!/usr/bin/python
-"""Module for crawling the web, extracting numbers, counting links and other statistics
+"""Module for crawling the web, extracting numbers, counting links and other stats
 
-	Calculates statistics and plots 2-D plots.
+	Calculates statistics of the data gathered and plots 2-D plots.
 	
 	Standard Module Dependencies:
 		argparse	ArgumentParser
 		urllib  	urlencode, urlopen,...
-		urllib2 	HTTPRedirectHandler, HTTPCookieProcessor, ...
+		urllib2 	HTTPRedirectHandler, HTTPCookieProcessor, etc
 		time    	sleep
-		datetime	now()
+		datetime	now(), datetime.strptime(), datetime.datetime(), etc
 		httplib 	IncompleteRead
+		numpy   	
+		matplotlib	pyplot.plot
 
 	Nonstandard Module Dependencies:
-		tz      	Local
+		tz      	Local # local time zone object definition
 
 	TODO:
 	1. deal with csv: http://www.google.com/trends/?q=bitcoin&ctab=0&geo=us&date=ytd&sort=0 , 
@@ -27,11 +29,14 @@
 	5. implement the indexer and search engine for the double-star question 3 in CS101 and get quant data directly from the index
 	6. implement the levetshire distance algorithm from the CS101 exam for use in word-stemming and search term similarity estimate
 
-	::Author: Hobson Lane, Alex Gagnon, Nataraj
-	::License: CC BY-NC-SA
-	::Attribution: Utilizes code from udacity.com licensed under CC BY-NC-SA
+	:copyright: 2012 by Hobson Lane (hobson@totalgood.com), see AUTHORS for details
+	:license:   Creative Commons BY-NC-SA, see LICENSE for more details
 """
 
+# TODO: smart import by wrapping all import statements in try: blocks
+# TODO: smarter import with gracefull fallback to "pass" or simple local implementations for unavailable modules
+# TODO: smartest import with pip install (setup.py install) of missing modules, if possible
+# TODO: ai import with automatic, on-the-fly, python source code generation... with comments and docstrings! ;)
 import datetime
 import time
 from tz import Local
@@ -44,6 +49,8 @@ import pprint
 from argparse import ArgumentParser
 import re
 from warnings import warn
+import numpy as np
+import matplotlib.pyplot as plt
 
 FILENAME=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 
@@ -460,7 +467,7 @@ def updateable(path,initial_content='',min_size=0):
 	#TODO: use os.path_exists instead of try
 	if not min_size:
 		try:
-			f = open(o.path,'r+') # w = create the file if it doesn't already exist, truncate to zero length if it does
+			f = open(path,'r+') # w = create the file if it doesn't already exist, truncate to zero length if it does
 		except:
 			return False
 		f.close()
@@ -478,7 +485,7 @@ def updateable(path,initial_content='',min_size=0):
 			else:
 				f.close()
 				if initial_content:
-					f = open(o.path,'w')
+					f = open(path,'w')
 					f.write(initial_content)
 					f.close()
 					return True
@@ -488,41 +495,71 @@ def updateable(path,initial_content='',min_size=0):
 			except:
 				return False
 			if initial_content:
-				f = open(o.path,'w')
+				f = open(path,'w')
 				f.write(initial_content)
 			f.close()
 			return True
 		return False
 
-def bycol_key(data, key='mtgox', x='datetime', y='average'):#function for returning values given a key of the dictionary data
-    columns =[]
-    for record in data:#index loops thru each data item which are dictionaries
-        #for all keys like mtgox use -- for key in keylist
-        if key in record.keys():
-            keyrecord = record[key]  
-            #print 'keyrecord=',keyrecord
-            columns.append([])# add an empty row
-            if x in keyrecord.keys():
-            # add the time to the empty row
-            # leave it as a string and I'll convert to a value
-                dt = datetime.datetime.strptime(keyrecord['datetime'][0:-6],"%Y-%m-%d %H:%M:%S.%f")
-                dt_value = float(dt.toordinal())+dt.hour/24.+dt.minute/24./60.+dt.second/24./3600.
-                columns[-1].append(dt_value)
-            if y in keyrecord.keys():
-                # float() won't work if there's a dollar sign in the price
-                value = float(keyrecord['average'].strip().strip('$').strip())
-                # add the value to the last row
-                columns[-1].append(value)
-        #pprint(columns,indent=2)       
-        return columns
+def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=False):#function for returning values given a key of the dictionary data
+	columns =[]
+	# loops thru each data item in the list
+	for record in data:
+		# if this record (dict) contains the named key ('mtgox')
+		if name in record.keys():
+			keyrecord = record[name]
+			#print 'keyrecord=',keyrecord
+			columns.append([])# add an empty row
+			# is the requested x data name in the dictionary for the record?
+			if xname in keyrecord:
+				# add the time to the empty row
+				# leave it as a string and I'll convert to a value
+				dt = datetime.datetime.strptime(keyrecord[xname][0:-6],"%Y-%m-%d %H:%M:%S.%f")
+				dt_value = float(dt.toordinal())+dt.hour/24.+dt.minute/24./60.+dt.second/24./3600.
+				columns[-1].append(dt_value)
+			if yname in keyrecord.keys():
+				# float() won't work if there's a dollar sign in the value/price, so get rid of it
+				value = float(keyrecord[yname].strip().strip('$').strip())
+				# add the value to the last row
+				columns[-1].append(value)
+	if verbose:
+		pprint.pprint(columns,indent=2)
+	return columns
 
-def test_read_json():
+def transpose_lists(lists):
+	"""Transpose a list of lists
+	
+	>>> print transpose_lists([[1, 2, 3], [4, 5, 6]])
+	[[1, 4], [2, 5], [3, 6]]
+	"""
+	
+	N,M = len(lists),len(lists[0])
+	
+	# create empty lists
+	result = []
+	for n in range(M):
+		result.append([])
+	
+	# put the rows in the columns
+	for n,l in enumerate(lists):
+		for m,el in enumerate(l):
+			result[m].append(el)
+	
+	return result
+		
+def byrow_key(data, name='mtgox', xname='datetime', yname='average'):#function for returning values given a key of the dictionary data
+	cols = bycol_key(data, name, xname, yname)
+	rows=transpose_lists(cols)
+	return columns
+
+
+def test_read_json(verbose=False):
 	import json
 	from pprint import pprint
 	import datetime
 
 	#data is a list of dictionaries obtained from the json file
-	data = load_json('bitcrawl_historical_data.json')
+	data = load_json()
 
 	#now creating a keylist
 	keylist = []
@@ -531,16 +568,17 @@ def test_read_json():
 		keylist = keylist + itemkey
 
 	#keylist is the list of keys from the list of dictionaries
-	print keylist
-	
+	if verbose:
+		print keylist
+		print data
 	#run it for a sample key 'mtgox' to get its datetime and average intoa list of list
-	listoflist = bycol_key(data, key='mtgox', y='average')
+	listoflist = bycol_key(data, name='mtgox', yname='average')
+	#[[734608.0348032408, 4.95759]]
 	assert len(listoflist)>10
 	for l in listoflist:
-		assert l[0]>73400
-		assert l[1]>0.1 and l[2]<25.0
 		assert len(l)==2
-	#[[734608.0348032408, 4.95759]]
+		assert l[0]>73400
+		assert l[1]>0.1 and l[1]<25.0
 
 def load_json(filename=FILENAME,verbose=False):
 	if verbose:  print 'Loading json data from "'+filename+'"'
@@ -654,6 +692,33 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 	for data in data_list:
 		json_strings.append(json.dumps(data,indent=2))
 	return prefix + ( ',\n'.join(json_strings) ) + suffix
+
+def plot_data(columns=None):
+	"""Plot 2-D points in first to columns in a list of lists
+	
+	>>> plot_data([[1,1],[2,4],[3,9]])
+	[[1, 2, 3], [1, 4, 9]] 
+	"""
+	if not columns:
+		#columns = bycol_key(load_json(),'mtgox','datetime','average')
+		columns = bycol_key(load_json())
+	elif isinstance(columns, str):
+		columns = bycol_key(load_json(path=columns))
+	print columns
+	rows = transpose_lists(columns)
+	print rows
+	plt.plot(rows[0],rows[1])
+	plt.show()
+	#if result[0:11] == str('[<matplotlib.lines.Line2D at 0xb01a66c>]')[0:11]:
+	#	return rows,result,result2
+	return rows
+	return None
+
+# plt.plot('yourdata') plots your data, plt.show() displays the figure.
+# Json data needs to be transposed.
+# plt.xlabel('some text') = adds label on x axis
+# plt.ylabel('some text') = adds label on y axis
+# plt.title('Title') = adds title
 
 if __name__ == "__main__":
 	import doctest
