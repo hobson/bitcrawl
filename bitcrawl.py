@@ -213,16 +213,20 @@ class Bot:
 	def GET(self, url,max_retries=10,retry_delay=3):
 		# don't wait less than 0.1 s or longer than 1 hr when retrying a network connection
 		retry_delay = min(max(retry_delay,0.1),3600)
-		datastr = '' # unnecessary?
+		file_object, datastr = None, ''
 		try:
 			file_object = self.opener.open(url)
 		# build_opener object doesn't handle 404 errors, etc !!! 
+		# TODO: put all these error handlers into our Bot class
 		except httplib.IncompleteRead, e:
 			print "HTTP read for URL '"+url+"' was incomplete: %d" % e.code
 		except urllib2.HTTPError, e:
 			print "HTTP error for URL '"+url+"': %d" % e.code
+		except httplib.BadStatusLine, e:
+			print "HTTP bad status link for URL '"+url+"': %d" % e.code
 		except urllib2.URLError, e:
 			print "Network error for URL '"+url+"': %s" % e.reason.args[1]
+		if not file_object:
 			# retry
 			if max_retries:
 				print "Waiting "+str(retry_delay)+" seconds before retrying network connection for URL '"+url+"'..."
@@ -230,12 +234,12 @@ class Bot:
 				time.sleep(retry_delay)
 				print "Retrying network connection for URL '"+url+"'."
 				return self.GET(url,max_retries-1)
-			else:
-				print "Exceeded maximum number of Network error retries."
-		try:
-			datastr = file_object.read() # should populate datastr with an empty string if the file_object is invalid, right?
-		except:
-			datastr = ''
+			print "Exceeded maximum number of Network error retries."
+		else:
+			try:
+				datastr = file_object.read() # should populate datastr with an empty string if the file_object is invalid, right?
+			except:
+				print 'Error reading http GET response'
 		return datastr
 	def POST(self, url, params):
 		self.url    = url
@@ -349,6 +353,61 @@ def union(p,q):
 	for e in q:
 		if e not in p:
 			p.append(e)
+
+def interp2col(lol,xnew):
+	N,M = len(lol),len(lol[0])
+	if N>M:
+		cols=transpose_lists(lol)
+	x=lol[0]
+	for c,col in enumerate(lol[1:]):
+		lol[c+1] = interpolate(x,col,xnew)
+
+def interpolate(x,y,newx,method='linear'):
+	"""
+	Interpolate y for newx.
+	
+	y and newx must be the same length
+	
+	>>> print interpolate([0,1,2],[5,6,7],[-.5,0,.33,.66,1.,1.33,1.66,2,2.5])
+	[5.0, 5.0, 5.33, 5.66, 6.0, 6.33, 6.66, 7.0, 7.0]
+	"""
+	# TODO: sort x,y (together as pairs of tuples) before interpolating, then unsort when done
+	newy=[]
+	if method[0:3].lower()=='lin':
+		i, j, x0, y0 = 0, 0, newx[0], y[0]
+		while i < len(x):
+			# no back-in-time extrapolation... yet
+			if x[i] < newx[j]:
+				x0, y0 = float(x[i]), float(y[i])
+				i += 1
+			else:
+				newy.append((float(y[i])-y0)*(float(newx[j])-x0)/(float(x[i])-x0)+y0)
+				j += 1
+		# no extrapolation, assume time stops ;)
+		for j in range(j,len(newx)):
+			newy.append(float(y[-1]))
+	else:
+		raise(NotImplementedError('Interpolation method not implemented'))
+	return newy
+
+
+def var(listoflist):# assuming equal datetime intervals
+	"""
+	:Author: Nat
+	"""
+	averagelist=[]
+	variance =0
+	for element in listoflist:
+		#print 'element=',element
+		#print 'element[1]=',element[1]
+		averagelist.append(element[1])# appends average value from listoflist
+	sumlist = sum(averagelist)
+	meanavg = sumlist/len(averagelist)#mean of the list containing all the 'average' data
+	print'meanavg=',meanavg
+	for e in averagelist:
+		variance = variance + (e - meanavg)**2
+	variance = variance/len(averagelist)
+	return variance
 
 def wikipedia_view_rates(articles=['Bitcoin','James_Surowiecki'],verbose=False,names=''):
 	# TODO: make this a 2-D array with the article title and various view rate stats for each element in articles
