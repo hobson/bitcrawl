@@ -201,6 +201,11 @@ class Bot:
 	TODO: 
 		allow specification of USER_AGENT, COOKIE_FILE, REFERRER_PAGE
 		if possible should use the get_page() code from the CS101 examples to show "relevance" for the contest
+		
+	Examples:
+	>>> b = Bot()
+	>>> 1000 < len(b.GET('http://totalgood.com')) < 1e7
+	True
 	"""
 	
 	def __init__(self):
@@ -796,11 +801,34 @@ def make_wide(lol):
 		lol=transpose_lists(lol)
 	return lol
 
+def unoffset(data,columns=[0]):
+	"""Subtracts the first value in the first column of a list from all the elements in that first column
+	
+	Designed for use with datetime values that have been converted to an ordinal 
+	and thus have large 'day-numbers'
+	>>> unoffset([range(75000,75005),[float(x)**1.5 for x in range(5)]])
+	[[0, 1, 2, 3, 4], [[0.0, 1.0, 2.8284271247461903, 5.196152422706632, 8.0]]]
+	"""
+	if isinstance(data, list):
+		if isinstance(data[0],list):
+			N,M = size(data)
+			if N>M:
+				d = make_tall([[r[0]-data[0][0] for r in data],make_wide(data)[1:]])
+			else:
+				d = [[t-data[0][0] for t in data[0]],data[1:]]
+		else:
+			d = [t-data[0] for t in data]
+		return d
+	warn('Unable to unoffset data of type '+str(type(data))+'.')
+	return None
 
 def size(lol):
-	return len(lol), max([len(L) for L in lol])
+	if lol:
+		return len(lol), max([ (len(L) if isinstance(L,(list,dict,set)) else 1) for L in lol])
+	else:
+		return None
 
-def plot_data(columns=None, title=__name__+' Data',quiet=False):
+def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
 	Example 
@@ -808,23 +836,46 @@ def plot_data(columns=None, title=__name__+' Data',quiet=False):
 	>>> plot_data([[1,1],[2,4],[3,9]],quiet=True) # displays a plot, then, when you close the plot, prints this
 	[[1, 2, 3], [1, 4, 9]]
 	"""
-	
+	site = [site] if isinstance(site,str) else site
+	value = [value] if isinstance(value,str) else value
+		
+	if not isinstance(site,list) or not isinstance(value,list) or not isinstance(site[0],str) or not isinstance(value[0],str):
+		warn('Unable to identify the values that you want to plot. '+
+			' \n site = '+ str(site)+
+			' \n value = '+ str(value)+
+			' \n type(columns) = '+str(type(columns))+
+			' \n size(columns) = '+str(size(columns))+'\n' )
+		return None
+
+	data=None
+	# TODO: load data inside one set of conditionals, then extrace columns in another set of conditionals
 	if not columns:
-		#columns = bycol_key(load_json(),'mtgox','datetime','average')
-		columns = bycol_key(load_json())
-	elif isinstance(columns, str):
-		columns = bycol_key(load_json(path=columns))
-	elif not (isinstance(columns,list) and isinstance(columns[0],list)):
+		data = load_json()
+		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+	if isinstance(columns, str):
+		data = load_json(path=columns)
+		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+	if not (isinstance(columns,list) and isinstance(columns[0],list)):
 		warn('Unable to plot data of type '+str(type(columns)))
 		return None
 
 	rows = make_wide(columns)
 	N,M = size(rows)
-
-	#print rows
-	plt.plot(rows[0],rows[1])
+	
+	i=1
+	if data and i<len(site):
+		while i<len(site):
+			s,v = site[i],value[i]
+			cols2 = bycol_key(data,s,v,xname='datetime')
+			# interpolate the new data to line up in time with the original data
+			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
+			i += 1
+		
+	
+	plt.plot(make_tall([rows[0]]),make_tall(rows[1:]))
 	if not quiet:
 		print 'A plot window titled "'+title+'" is being displayed. You must close it before '+__name__+' can procede...'
+	plt.grid('on')
 	plt.show()
 	return rows
 
