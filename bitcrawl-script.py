@@ -94,14 +94,14 @@ def parse_args():
 	p.add_argument(
 		'-t','--tab',
 		action  = 'store_true',
-		default = 'false',
+		default = False,
 		help    = "In the output file, precede numerical data with a tab (column separator).",
 		)
 	p.add_argument(
 		'-n','--no-mine','--no-mining','--no-data','--no-datamining','--no-crawl','--no-crawling',
 		dest    = 'nomine',
 		action  = 'store_true',
-		default = 'false',
+		default = False,
 		help    = "Don't crawl the internet for numerical data.",
 		)
 	p.add_argument(
@@ -134,10 +134,15 @@ if __name__ == "__main__":
 	if not o.quiet or o.verbose:
 		data = bc.load_json(filename=o.path,verbose='Historical data...') # verbose means the data will print out with that as the heading
 
+	# This is the hard coded proof-of-concept forecasting algorithm
+	print 'Correlation coefficient for the data series selected is'
+	print bc.forecast_data()
+
 	if o.graph and isinstance(o.graph,str):
 		u,v = o.graph.split('.')
 		bc.plot_data(columns=None,site=u,value=v)
 	
+
 	if not o.nomine:
 		# mine hard-coded urls
 		d = dict()
@@ -154,6 +159,7 @@ if __name__ == "__main__":
 		else:
 			raise ValueError('Invalid URL, prefix, or regex argument.')
 	
+		# CRAWLING and MINING done here
 		data=[ d,
 			   bc.bitfloor_book       (            verbose=not o.quiet),
 			   bc.wikipedia_view_rates(            verbose=not o.quiet),

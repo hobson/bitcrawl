@@ -203,8 +203,7 @@ class Bot:
 		if possible should use the get_page() code from the CS101 examples to show "relevance" for the contest
 		
 	Examples:
-	>>> b = Bot()
-	>>> 1000 < len(b.GET('http://totalgood.com')) < 1e7
+	>>> 1000 < len(Bot().GET('http://totalgood.com')) < 1e7
 	True
 	"""
 	
@@ -604,6 +603,43 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 		pprint.pprint(columns,indent=2)
 	return columns
 
+def lag_correlate(A,B,lead=1):
+	"""
+	Correlate 2 data sets, lagging the data in B by 1 sample period (linear forecasting test)
+	
+	Recursively handles deep (inf ;) dimensionality
+	
+	Even though this example works like I'd hoped indicating that lagged data
+	has higher lag_correlation than unlagged (lock-step) data. But this doesn't
+	appear to be true generally. So this approach may be misguided.
+	
+	lag_correlate([1,2,3,2,1,2,3,2,1],[1,2,3,2,1,2,3,2,1])
+	32
+	lag_correlate([1,2,3,2,1,2,3,2,1],[2,3,2,1,2,3,2,1,2])
+	36
+	
+	"""
+	if isinstance(A,list) and isinstance(B,list):
+		if isinstance(A[0],list) and isinstance(B[0],list):
+			A=make_wide(A)
+			B=make_wide(B)
+			return [lag_correlate(a,b) for a,b in zip(A,B)]
+		else:
+			# TODO: this seems to be led rather than lagged!
+			return np.correlate(A[lead:],B[:-lead])[0]
+	else:
+		return None
+
+
+def combo_correlate(A,B):
+	"""Correlate every row in A with every row in B
+	
+	Unlike lag_correlate, which reduces the dimensionality of the data by 1,
+	this operation maintains the dimensionality. So 2 matrixes will produce 
+	a matrix of correlation coefficients.
+	"""
+	pass
+
 def transpose_lists(lists):
 	"""Transpose a list of lists
 	
@@ -875,6 +911,51 @@ def var(lol):
 			else:
 				return lol[0]**2
 
+def forecast_data(columns=None, site=['mtgox','wikipedia'], value=['average','wikipedia_view_rate_Bitcoin'],
+                  title=__name__+' Forecast', quiet=False):
+	"""Correlate data with lag
+	
+	Examples:
+	"""
+	site = [site,site] if isinstance(site,str) else site
+	value = [value,value] if isinstance(value,str) else value
+	
+	if not isinstance(site,list) or not isinstance(value,list) or not isinstance(site[0],str) or not isinstance(value[0],str):
+		warn('Unable to identify the values that you want to correlate. '+
+			' \n site = '+ str(site)+
+			' \n value = '+ str(value)+
+			' \n type(columns) = '+str(type(columns))+
+			' \n size(columns) = '+str(size(columns))+'\n' )
+		return None
+
+	if not columns:
+		data = load_json()
+		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+	if isinstance(columns, str):
+		data = load_json(path=columns)
+		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+	if not (isinstance(columns,list) and isinstance(columns[0],list)):
+		warn('Unable to correlate data of type '+str(type(columns)))
+		return None
+
+	# TODO: generalize the assumption that datetime is ordinal days
+	# interpolate to create regularly-space, e.g.daily, values
+	t = range(int(min(columns[0])),int(max(columns[0]))+1)
+	columns[1] = interpolate(columns[0],columns[1],t)
+	columns[0] = t
+
+	i=1
+	if data and i<len(site):
+		while i<len(site):
+			s,v = site[i],value[i]
+			cols2 = bycol_key(data,s,v,xname='datetime')
+			# interpolate the new data to line up in time with the original data
+			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
+			i += 1
+	rows = make_wide(columns)
+	#N,M = size(rows)
+	return lag_correlate(rows[1],rows[2])
+
 def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
@@ -906,8 +987,6 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 		warn('Unable to plot data of type '+str(type(columns)))
 		return None
 
-	rows = make_wide(columns)
-	N,M = size(rows)
 	
 	i=1
 	if data and i<len(site):
@@ -917,7 +996,9 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 			# interpolate the new data to line up in time with the original data
 			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
 			i += 1
-		
+	
+	rows = make_wide(columns)
+	#N,M = size(rows)
 	
 	plt.plot(make_tall([rows[0]]),make_tall(rows[1:]))
 	if not quiet:
