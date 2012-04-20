@@ -410,7 +410,7 @@ def interpolate(x,y,newx=None,method='linear'):
 	return newy
 
 
-def var(listoflist):# assuming equal datetime intervals
+def var2(listoflist):# assuming equal datetime intervals
 	"""
 	:Author: Nat
 	"""
@@ -793,9 +793,14 @@ def make_tall(lol):
 def make_wide(lol):
 	"""Ensures that a list of list has more columns than rows
 	
+	TODO:
+	Makerecursive so it will work on high-dimensional lists (at least 3D and 4D)
+	
+	Examples:
 	>>> make_wide([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)])
 	[[0, 1, 2, 3, 4, 5], [0.0, 1.0, 2.8284271247461903, 5.196152422706632, 8.0, 11.180339887498949], [3, 2, 1, 0, -1, -2]]
 	"""
+	# TODO size() needs to handle high-dimensionality
 	N,M = size(lol)
 	if N>M:
 		lol=transpose_lists(lol)
@@ -827,6 +832,48 @@ def size(lol):
 		return len(lol), max([ (len(L) if isinstance(L,(list,dict,set)) else 1) for L in lol])
 	else:
 		return None
+
+def mean(lol): 
+	"""
+	Compute mean (expected value, or average) of columns (or rows, if rows longer).
+	
+	Recursively handles high-dimensional lists, even if lists in a dim. vary in length 
+	as long as all elements have the same dimension (matrix, list, scalar, etc)
+	>>> mean([[[2,3,4],[-4,-4,-4],[-8,-3,9,-1]],[[1,2,3],[4,5],[2]]])
+	[[3.0, -4.0, -0.75], [2.0, 4.5, 2.0]]
+	"""
+	if isinstance(lol,list):
+		if isinstance(lol[0],list):
+			rows = make_wide(lol) # if this could handle high-dimensional lists we'd be in business
+			# won't this recursively dive into a multidimensional list?
+			return [mean(row) for row in rows] 
+		else:
+			return float(sum(lol))/len(lol)
+
+def detrend(lol):
+	pass
+
+def var(lol): 
+	"""
+	Compute variance of columns of data (or rows, whichever are longer).
+	
+	Recursively handles high-dimensional lists, even if lists in a dim. vary in length 
+	as long as all elements have the same dimension (matrix, list, scalar, etc)
+	>>> var([[[2,3,4],[-4,-4,-4],[-8,-3,9,-1]],[[1,2,3],[4,5],[2]]])
+	[[1.0, 0.0, 50.916666666666664], [1.0, 0.5, 4]]
+	"""
+	if isinstance(lol,list):
+		if isinstance(lol[0],list):
+			rows = make_wide(lol) # if this could handle high-dimensional lists we'd be in business
+			# won't this recursively dive into a multidimensional list?
+			return [var(row) for row in rows] 
+		else:
+			if len(lol)>1:
+				mu = mean(lol)
+				# all sorts of essoteric math reasons for dividing by N-1 instead of N
+				return sum([(x-mu)**2 for x in lol])/(len(lol)-1)
+			else:
+				return lol[0]**2
 
 def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
