@@ -355,9 +355,7 @@ def union(p,q):
 			p.append(e)
 
 def interp2col(lol,xnew):
-	N,M = len(lol),len(lol[0])
-	if N>M:
-		cols=transpose_lists(lol)
+	N,M = make_tall(lol)
 	x=lol[0]
 	for c,col in enumerate(lol[1:]):
 		lol[c+1] = interpolate(x,col,xnew)
@@ -752,26 +750,56 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 		json_strings.append(json.dumps(data,indent=2))
 	return prefix + ( ',\n'.join(json_strings) ) + suffix
 
-def plot_data(columns=None):
+def make_tall(lol):
+	N,M = len(lol),len(lol[0])
+	if N<M:
+		lol=transpose_lists(lol)
+	return lol
+
+def make_wide(lol):
+	"""Ensures that a list of list has more columns than rows
+	
+	>>> make_wide([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)])
+	[[0, 1, 2, 3, 4, 5],
+	[0.0, 1.0, 2.8284271247461903, 5.196152422706632, 8.0, 11.180339887498949],
+	[3, 2, 1, 0, -1, -2]]
+	"""
+	N,M = len(lol),len(lol[0])
+	if N>M:
+		lol=transpose_lists(lol)
+	return lol
+
+
+def size(lol):
+	return len(lol),len(lol[0])
+
+def plot_data(columns=None, title=__name__+' Data',quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
-	>>> plot_data([[1,1],[2,4],[3,9]])
-	[[1, 2, 3], [1, 4, 9]] 
+	Example 
+	# doctests don't work with pyplot calls even though console output appears to match
+	> > plot_data([[1,1],[2,4],[3,9]],quiet=True)
+	[[1, 2, 3], [1, 4, 9]] # displays a plot, then, when you close the plot, prints this
 	"""
+	
 	if not columns:
 		#columns = bycol_key(load_json(),'mtgox','datetime','average')
 		columns = bycol_key(load_json())
 	elif isinstance(columns, str):
 		columns = bycol_key(load_json(path=columns))
-	print columns
-	rows = transpose_lists(columns)
-	print rows
+	elif not (isinstance(columns,list) and isinstance(columns[0],list)):
+		warn('Unable to plot data of type '+str(type(columns)))
+		return None
+
+	rows = make_wide(columns)
+	N,M = size(rows)
+
+	#print rows
 	plt.plot(rows[0],rows[1])
+	if not quiet:
+		print 'A plot window titled "'+title+'" is being displayed. You must close it before '+__name__+' can procede...'
 	plt.show()
-	#if result[0:11] == str('[<matplotlib.lines.Line2D at 0xb01a66c>]')[0:11]:
-	#	return rows,result,result2
 	return rows
-	return None
 
 # plt.plot('yourdata') plots your data, plt.show() displays the figure.
 # Json data needs to be transposed.
