@@ -388,9 +388,10 @@ def interpolate(x,y,newx=None,method='linear'):
 		newx = [float(x1*(x[-1]-x[0]))/(N-1)+x[0] for x1 in range(len(x))]
 	#print newx
 	newy=[]
+	N=len(newx)
 	if method[0:3].lower()=='lin':
 		i, j, x0, y0 = 0, 0, newx[0], y[0]
-		while i < len(x):
+		while i < len(x) and j<N:
 			# no back-in-time extrapolation... yet
 			if x[i] <= newx[j]:
 				x0, y0 = float(x[i]), float(y[i])
@@ -400,9 +401,11 @@ def interpolate(x,y,newx=None,method='linear'):
 					newy.append((float(y[i])-y0)*(float(newx[j])-x0)/(float(x[i])-x0)+y0)
 				else: #nearest neighbor is fine if interpolation distance is zero!
 					newy.append(float(y0))
-				j += 1
+				if j==N-1: # we've finished the last newx value
+					break
+				j = j+1
 		# no extrapolation, assume time stops ;)
-		for j in range(j,len(newx)):
+		for j in range(j,N):
 			newy.append(float(y[-1]))
 	else:
 		raise(NotImplementedError('Interpolation method not implemented'))
@@ -579,22 +582,28 @@ def updateable(path,initial_content='',min_size=0):
 		return False
 
 def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=False):#function for returning values given a key of the dictionary data
-	columns =[]
+	columns =[] # list of pairs of values
 	# loops thru each data item in the list
 	for record in data:
-		# if this record (dict) contains the named key ('mtgox')
-		if name in record.keys():
+		# if this record (dict) contains the named key (e.g. 'mtgox')
+		#print 'looking for '+name
+		if name in record:
+			#print '-------- found '+name
 			keyrecord = record[name]
 			#print 'keyrecord=',keyrecord
-			columns.append([])# add an empty row
+			columns.append([])# add an empty row to hold the new data
 			# is the requested x data name in the dictionary for the record?
+			#print 'looking for '+xname
 			if xname in keyrecord:
+				#print '-------- found '+xname
 				# add the time to the empty row
 				# leave it as a string and I'll convert to a value
 				dt = datetime.datetime.strptime(keyrecord[xname][0:-6],"%Y-%m-%d %H:%M:%S.%f")
 				dt_value = float(dt.toordinal())+dt.hour/24.+dt.minute/24./60.+dt.second/24./3600.
 				columns[-1].append(dt_value)
-			if yname in keyrecord.keys():
+			#print 'looking for '+yname
+			if yname in keyrecord:
+				#print '-------- found '+yname
 				# float() won't work if there's a dollar sign in the value/price, so get rid of it
 				value = float(keyrecord[yname].strip().strip('$').strip())
 				# add the value to the last row
@@ -602,6 +611,34 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 	if verbose:
 		pprint.pprint(columns,indent=2)
 	return columns
+
+def byrow_key(data, name='mtgox', yname='average', xname='datetime',verbose=False):
+	#function for returning values given a key of the dictionary data
+	cols = bycol_key(data=data, name=name, yname=yname, xname=xname,verbose=verbose)
+	#print cols
+	return(transpose_lists(cols))
+
+def cov(A,B):
+	"""Covariance of 2 equal-length lists of scalars"""
+	ma = mean(A)
+	mb = mean(B)
+	return sum([(a-ma)*(b-mb) for a,b in zip(A,B)])/len(A)
+
+def pearson(A,B):
+	"""Pearson correlation coefficient between 2 equal-length lists of scalars"""
+	return cov(A,B)/std(A)/std(B)
+	
+#def pearson(A,B):
+#	"""Pearson coefficient or correlation coefficient"""
+#	if isinstance(lol,list):
+#		lol = make_wide(lol)
+#		r = list()
+#		for i,row in enumerae(lol):
+#			r.append(list())
+#			for j,row in enumerate(lol):
+#				pass
+#	else:
+#		pass
 
 def lag_correlate(A,B,lead=1):
 	"""
@@ -624,11 +661,9 @@ def lag_correlate(A,B,lead=1):
 			A=make_wide(A)
 			B=make_wide(B)
 			return [lag_correlate(a,b) for a,b in zip(A,B)]
-		else:
-			# TODO: this seems to be led rather than lagged!
-			return np.correlate(A[lead:],B[:-lead])[0]
-	else:
-		return None
+		# TODO: this seems to be led rather than lagged!
+		return pearson(A[lead:],B[:-lead])
+	return None
 
 
 def combo_correlate(A,B):
@@ -668,12 +703,6 @@ def transpose_lists(lists):
 			result[m].append(el)
 	
 	return result
-		
-def byrow_key(data, name='mtgox', xname='datetime', yname='average'):#function for returning values given a key of the dictionary data
-	cols = bycol_key(data, name, xname, yname)
-	rows=transpose_lists(cols)
-	return columns
-
 
 def test_read_json(verbose=False):
 	import json
@@ -910,8 +939,21 @@ def var(lol):
 				return sum([(x-mu)**2 for x in lol])/(len(lol)-1)
 			else:
 				return lol[0]**2
+	return lol
 
-def forecast_data(columns=None, site=['mtgox','wikipedia'], value=['average','wikipedia_view_rate_Bitcoin'],
+# TODO: obviously there's a non-DRY pattern here, 
+#       where any function that operates on scalar or vector can be made to operate 
+#       on a list of scalars or list of list of scalars, etc
+def std(lol): 
+	from math import sqrt
+	#v = var(lol) # FIXME: doing this with every recursive call is phenommenally inefficient
+	if isinstance(lol,list):
+		if isinstance(lol[0],list):
+			return [std(var(el)) for el in lol] 
+		return sqrt(var(lol))
+	return sqrt(var(lol))
+
+def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], value=['average','view_rate_Bitcoin'],
                   title=__name__+' Forecast', quiet=False):
 	"""Correlate data with lag
 	
@@ -920,6 +962,7 @@ def forecast_data(columns=None, site=['mtgox','wikipedia'], value=['average','wi
 	site = [site,site] if isinstance(site,str) else site
 	value = [value,value] if isinstance(value,str) else value
 	
+	#print site,value
 	if not isinstance(site,list) or not isinstance(value,list) or not isinstance(site[0],str) or not isinstance(value[0],str):
 		warn('Unable to identify the values that you want to correlate. '+
 			' \n site = '+ str(site)+
@@ -928,12 +971,15 @@ def forecast_data(columns=None, site=['mtgox','wikipedia'], value=['average','wi
 			' \n size(columns) = '+str(size(columns))+'\n' )
 		return None
 
+	data = None
 	if not columns:
 		data = load_json()
-		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
 	if isinstance(columns, str):
 		data = load_json(path=columns)
-		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+	#print data[-1]
+	if data:
+		columns = byrow_key(data,name=site[0],yname=value[0],xname='datetime',verbose=False)
+	#print columns
 	if not (isinstance(columns,list) and isinstance(columns[0],list)):
 		warn('Unable to correlate data of type '+str(type(columns)))
 		return None
@@ -941,20 +987,34 @@ def forecast_data(columns=None, site=['mtgox','wikipedia'], value=['average','wi
 	# TODO: generalize the assumption that datetime is ordinal days
 	# interpolate to create regularly-space, e.g.daily, values
 	t = range(int(min(columns[0])),int(max(columns[0]))+1)
+	#print len(columns[0]), len(columns[1]), len(t)
 	columns[1] = interpolate(columns[0],columns[1],t)
 	columns[0] = t
-
+	#print columns
 	i=1
 	if data and i<len(site):
 		while i<len(site):
 			s,v = site[i],value[i]
-			cols2 = bycol_key(data,s,v,xname='datetime')
+			#print s,v
+			cols2 = bycol_key(data,name=s,yname=v,xname='datetime')
+			if cols2:
+				cols2 = make_wide(cols2)
+			Ncols = len(cols2)
+			if Ncols<2: 
+				break
 			# interpolate the new data to line up in time with the original data
-			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
+			#print len(cols2[0]), len(cols2[1]),len(columns[0])
+			newrow = interpolate(cols2[0],cols2[1],columns[0])
+			#print newrow
+			#print columns
+			columns.append(newrow)
+			#print columns
 			i += 1
 	rows = make_wide(columns)
 	#N,M = size(rows)
-	return lag_correlate(rows[1],rows[2])
+	if len(rows)>2:
+		return lag_correlate(rows[1],rows[2])
+	return None
 
 def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
@@ -979,10 +1039,10 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 	# TODO: load data inside one set of conditionals, then extrace columns in another set of conditionals
 	if not columns:
 		data = load_json()
-		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+		columns = make_wide(bycol_key(data,name=site[0],yname=value[0],xname='datetime'))
 	if isinstance(columns, str):
 		data = load_json(path=columns)
-		columns = bycol_key(data,name=site[0],yname=value[0],xname='datetime')
+		columns = make_wide(bycol_key(data,name=site[0],yname=value[0],xname='datetime'))
 	if not (isinstance(columns,list) and isinstance(columns[0],list)):
 		warn('Unable to plot data of type '+str(type(columns)))
 		return None
@@ -992,7 +1052,7 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 	if data and i<len(site):
 		while i<len(site):
 			s,v = site[i],value[i]
-			cols2 = bycol_key(data,s,v,xname='datetime')
+			cols2 = bycol_key(data,name=s,yname=v,xname='datetime')
 			# interpolate the new data to line up in time with the original data
 			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
 			i += 1

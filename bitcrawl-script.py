@@ -135,8 +135,16 @@ if __name__ == "__main__":
 		data = bc.load_json(filename=o.path,verbose='Historical data...') # verbose means the data will print out with that as the heading
 
 	# This is the hard coded proof-of-concept forecasting algorithm
-	print 'Correlation coefficient for the data series selected is'
-	print bc.forecast_data()
+	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+	print 'Correlation coefficient for the data series selected'
+	print '("wikipedia view rates for bitcoin page" and "MtGox bitcoin average" price)'
+	print ' is...'
+	print bc.forecast_data(columns=None, # reload historical data
+							site=['mtgox','wikipedia_view_rate_Bitcoin'], # extract records for these websites
+							value=['average','view_rate_Bitcoin'], # use these values from those pages
+							quiet=True)
+	#TODO calculate for all paramters and find the maximum
+	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 
 	if o.graph and isinstance(o.graph,str):
 		u,v = o.graph.split('.')
@@ -159,7 +167,7 @@ if __name__ == "__main__":
 		else:
 			raise ValueError('Invalid URL, prefix, or regex argument.')
 	
-		# CRAWLING and MINING done here
+		# CRAWLING and MINING done here, data stored as a list of lists of dicts of dicts
 		data=[ d,
 			   bc.bitfloor_book       (            verbose=not o.quiet),
 			   bc.wikipedia_view_rates(            verbose=not o.quiet),
