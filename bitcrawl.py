@@ -354,32 +354,48 @@ def union(p,q):
 		if e not in p:
 			p.append(e)
 
-def interp2col(lol,xnew):
-	N,M = make_tall(lol)
+def interp_multicol(lol,newx=None):
+	"""Linearly interpolate mulitple columns of data. First column is independent variable.
+	
+	>>> interp_multicol([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)],[0.4*x for x in range(15)])
+	"""
+	#print lol
+	lol = make_wide(lol)
 	x=lol[0]
+	#print lol[1:]
 	for c,col in enumerate(lol[1:]):
-		lol[c+1] = interpolate(x,col,xnew)
+		#print c,col,x,newx
+		lol[c+1] = interpolate(x,col,newx)
 
-def interpolate(x,y,newx,method='linear'):
+def interpolate(x,y,newx=None,method='linear'):
 	"""
 	Interpolate y for newx.
 	
 	y and newx must be the same length
 	
-	>>> print interpolate([0,1,2],[5,6,7],[-.5,0,.33,.66,1.,1.33,1.66,2,2.5])
+	>>> interpolate([0,1,2],[5,6,7],[-.5,0,.33,.66,1.,1.33,1.66,2,2.5])
 	[5.0, 5.0, 5.33, 5.66, 6.0, 6.33, 6.66, 7.0, 7.0]
+	>>> interpolate([0,3,4],[1,2,3])
+	[1.0, 1.6666666666666665, 3.0]
 	"""
 	# TODO: sort x,y (together as pairs of tuples) before interpolating, then unsort when done
+	if not newx:
+		N = max(len(x),2)
+		newx = [float(x1*(x[-1]-x[0]))/(N-1)+x[0] for x1 in range(len(x))]
+	#print newx
 	newy=[]
 	if method[0:3].lower()=='lin':
 		i, j, x0, y0 = 0, 0, newx[0], y[0]
 		while i < len(x):
 			# no back-in-time extrapolation... yet
-			if x[i] < newx[j]:
+			if x[i] <= newx[j]:
 				x0, y0 = float(x[i]), float(y[i])
 				i += 1
 			else:
-				newy.append((float(y[i])-y0)*(float(newx[j])-x0)/(float(x[i])-x0)+y0)
+				if x[i] != x0: # check for divide by zero
+					newy.append((float(y[i])-y0)*(float(newx[j])-x0)/(float(x[i])-x0)+y0)
+				else: #nearest neighbor is fine if interpolation distance is zero!
+					newy.append(float(y0))
 				j += 1
 		# no extrapolation, assume time stops ;)
 		for j in range(j,len(newx)):
@@ -586,11 +602,18 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 def transpose_lists(lists):
 	"""Transpose a list of lists
 	
-	>>> print transpose_lists([[1, 2, 3], [4, 5, 6]])
+	TODO: fill gaps in inconsistent row lengths with None elements to maintain geometry
+	
+	Examples:
+	>>> transpose_lists([[1, 2, 3], [4, 5, 6], ])
 	[[1, 4], [2, 5], [3, 6]]
+	
+	It even works for matrixes with inconsistent row lengths (though it may not do what you intend)
+	>>> transpose_lists([[0, 1, 2, 3], [4, 5, 6, 7, 8], [9, 10, 11]])
+	[[0, 4, 9], [1, 5, 10], [2, 6, 11], [3, 7], [8]]
 	"""
 	
-	N,M = len(lists),len(lists[0])
+	N,M = size(lists)
 	
 	# create empty lists
 	result = []
@@ -600,6 +623,7 @@ def transpose_lists(lists):
 	# put the rows in the columns
 	for n,l in enumerate(lists):
 		for m,el in enumerate(l):
+			#print n,m,l,el,result
 			result[m].append(el)
 	
 	return result
@@ -733,7 +757,6 @@ def mine_data(url='', prefixes=r'', regexes=r'', suffixes=r'', names='', verbose
 					warn('No numerical data was extracted.')
 				if not name:
 					warn('No name for the numerical data was provided.')
-
 	return dat
 
 def are_all_urls(urls):
@@ -750,8 +773,14 @@ def join_json(data_list=[],sep=',\n',prefix='[\n\n',suffix='\n]\n'):
 		json_strings.append(json.dumps(data,indent=2))
 	return prefix + ( ',\n'.join(json_strings) ) + suffix
 
-def make_tall(lol):
-	N,M = len(lol),len(lol[0])
+def make_tall(lol):	
+	"""Ensures that a list of list has more rows than columns
+	
+	>>> make_tall([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)])
+	[[0, 0.0, 3], [1, 1.0, 2], [2, 2.8284271247461903, 1], [3, 5.196152422706632, 0], [4, 8.0, -1], [5, 11.180339887498949, -2]]
+	"""
+	N,M = size(lol)
+	#print N,M
 	if N<M:
 		lol=transpose_lists(lol)
 	return lol
@@ -760,26 +789,24 @@ def make_wide(lol):
 	"""Ensures that a list of list has more columns than rows
 	
 	>>> make_wide([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)])
-	[[0, 1, 2, 3, 4, 5],
-	[0.0, 1.0, 2.8284271247461903, 5.196152422706632, 8.0, 11.180339887498949],
-	[3, 2, 1, 0, -1, -2]]
+	[[0, 1, 2, 3, 4, 5], [0.0, 1.0, 2.8284271247461903, 5.196152422706632, 8.0, 11.180339887498949], [3, 2, 1, 0, -1, -2]]
 	"""
-	N,M = len(lol),len(lol[0])
+	N,M = size(lol)
 	if N>M:
 		lol=transpose_lists(lol)
 	return lol
 
 
 def size(lol):
-	return len(lol),len(lol[0])
+	return len(lol), max([len(L) for L in lol])
 
 def plot_data(columns=None, title=__name__+' Data',quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
 	Example 
-	# doctests don't work with pyplot calls even though console output appears to match
-	> > plot_data([[1,1],[2,4],[3,9]],quiet=True)
-	[[1, 2, 3], [1, 4, 9]] # displays a plot, then, when you close the plot, prints this
+	# doctests will pause and user must close plot for this test to pass
+	>>> plot_data([[1,1],[2,4],[3,9]],quiet=True) # displays a plot, then, when you close the plot, prints this
+	[[1, 2, 3], [1, 4, 9]]
 	"""
 	
 	if not columns:
