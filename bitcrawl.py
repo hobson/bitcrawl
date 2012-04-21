@@ -45,7 +45,7 @@ import urllib
 import urllib2
 import httplib
 import json
-import pprint
+from pprint import pprint
 from argparse import ArgumentParser
 import re
 from warnings import warn
@@ -55,6 +55,7 @@ import matplotlib.pyplot as plt
 FILENAME=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 MIN_ORDINAL=1800*365.25 # data associated with datetime ordinals smaller than this will be ignored
 MAX_ORDINAL=2100*365.25 # data associated with datetime ordinals larger than this will be ignored
+SAMPLE_BIAS_COMP = 0 # whether to divide variance values by N-1 (0 divides by N so that small sample sets still give 1 for Pearson self-correlation coefficient)
 
 # Hard-coded regular expressions, keywords, and URLs for gleaning numerical data from the web
 URLs={'network': 
@@ -603,7 +604,7 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 				if dt and value and MIN_ORDINAL <= dt <= MAX_ORDINAL: # dates before 1800 don't make sense
 					columns.append([dt,value])
 	if verbose:
-		pprint.pprint(columns,indent=2)
+		pprint(columns,indent=2)
 	return columns
 
 def str2datetime(s=datetime.datetime.fromordinal(1)):
@@ -684,17 +685,6 @@ def pearson(A,B):
 	"""Pearson correlation coefficient between 2 equal-length lists of scalars"""
 	return cov(A,B)/std(A)/std(B)
 	
-#def pearson(A,B):
-#	"""Pearson coefficient or correlation coefficient"""
-#	if isinstance(lol,list):
-#		lol = make_wide(lol)
-#		r = list()
-#		for i,row in enumerae(lol):
-#			r.append(list())
-#			for j,row in enumerate(lol):
-#				pass
-#	else:
-#		pass
 
 def lag_correlate(A,B,lead=1):
 	"""
@@ -706,10 +696,17 @@ def lag_correlate(A,B,lead=1):
 	has higher lag_correlation than unlagged (lock-step) data. But this doesn't
 	appear to be true generally. So this approach may be misguided.
 	
+	Examples:
 	>>> lag_correlate([1,2,3,2,1,2,3,2,1],[1,2,3,2,1,2,3,2,1],lead=1)
 	0.0
 	>>> lag_correlate([1,2,3,2,1,2,3,2,1],[2,3,2,1,2,3,2,1,2],lead=1)
-	0.8750000000000001
+	0.9999999999999999
+	
+	Note:
+	for SAMPLE_BIAS_COMP = 1 , second example should give
+	  0.875 
+	instead of 1.0 due to division by N-1 instead of N
+	
 	"""
 	if isinstance(A,list) and isinstance(B,list):
 		if isinstance(A[0],list) and isinstance(B[0],list):
@@ -721,7 +718,12 @@ def lag_correlate(A,B,lead=1):
 					C[i][j]=lag_correlate(a,b,lead)
 			return C
 		# TODO: this seems to be led rather than lagged!
-		return pearson(A[lead:],B[:-lead])
+		if lead>0:
+			return pearson(A[lead:    ],B[         :-abs(lead)])
+		elif lead<0:
+			return pearson(A[    :lead],B[abs(lead):          ])
+		else:
+			return pearson(A           ,B                      )
 	return None
 
 
@@ -767,7 +769,6 @@ def transpose_lists(lists):
 
 def test_read_json(verbose=False):
 	import json
-	from pprint import pprint
 	import datetime
 
 	#data is a list of dictionaries obtained from the json file
@@ -803,7 +804,7 @@ def load_json(filename=FILENAME,verbose=False):
 		if verbose and isinstance(verbose,str):
 			print verbose
 		if verbose:
-			pprint.pprint(data)
+			pprint(data)
 		return data
 	return None
 
@@ -993,8 +994,15 @@ def var(lol):
 	
 	Recursively handles high-dimensional lists, even if lists in a dim. vary in length 
 	as long as all elements have the same dimension (matrix, list, scalar, etc)
+	
+	Example:   
 	>>> var([[[2,3,4],[-4,-4,-4],[-8,-3,9,-1]],[[1,2,3],[4,5],[2]]])
-	[[1.0, 0.0, 50.916666666666664], [1.0, 0.5, 4]]
+	[[0.6666666666666666, 0.0, 38.1875], [0.6666666666666666, 0.25, 4]]
+	
+	Note:
+	Example will give 
+	  [[1.0, 0.0, 50.916666666666664], [1.0, 0.5, 4]]
+	if SAMPLE_BIAS_COMP is set to 1 in the contants section bitcrawl.py
 	"""
 	if isinstance(lol,list):
 		if isinstance(lol[0],list):
@@ -1005,7 +1013,7 @@ def var(lol):
 			if len(lol)>1:
 				mu = mean(lol)
 				# all sorts of essoteric math reasons for dividing by N-1 instead of N
-				return sum([(x-mu)**2 for x in lol])/(len(lol)-1)
+				return sum([(x-mu)**2 for x in lol])/(len(lol)-SAMPLE_BIAS_COMP)
 			else:
 				return lol[0]**2
 	return lol
@@ -1105,15 +1113,8 @@ def col_normalize(columns):
 	([[0.0, 0.0], [0.5, 1.0], [1.0, 0.6666666666666666]], [1, 200000.0], [2, 300000.0])
 	"""
 	rows = transpose_lists(columns)
-	sf = []
-	minr = []
-	for i,r in enumerate(rows):
-		maxr = max(r)
-		minr.append(min(r))
-		sf.append(maxr-minr[i])
-		for j,el in enumerate(r):
-			columns[j][i] = float(el-minr[i])/sf[i]
-	return columns,minr,sf # return enough data to recover the original
+	rows,minr,sf = row_normalize(rows) # return enough data to recover the original
+	return transpose_lists(rows), minr, sf
 
 def row_normalize(rows):
 	"""Normalize each row so that it spans the range 0..1
@@ -1133,9 +1134,8 @@ def row_normalize(rows):
 			rows[i][j] = float(el-minr[i])/sf[i]
 	return rows,minr,sf # return enough data to recover the original
 
-		
 	
-def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False, normalize=False):
+def plot_data(columns=None, site=['mtgox'], value=['average'], title='Normalized ' +__name__+' Data', quiet=False, normalize=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
 	Example 
@@ -1145,7 +1145,9 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 	"""
 	site = [site] if isinstance(site,str) else site
 	value = [value] if isinstance(value,str) else value
-		
+	legends = [str(s)+':'+str(v) for s,v in zip(site,value)]
+	legends = [s[max(len(s)-14,0):] for s in legends]
+	
 	if not isinstance(site,list) or not isinstance(value,list) or not isinstance(site[0],str) or not isinstance(value[0],str):
 		warn('Unable to identify the values that you want to plot. '+
 			' \n site = '+ str(site)+
@@ -1182,11 +1184,10 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 	x,y = columns2xy(columns)
 	
 	if normalize==True:
-		y = col_normalize(y)
-	
-	#print size(x),size(y)
+		y,miny,sfy = col_normalize(y)
 	plt.plot(x,y)
 	plt.title(title)
+	plt.legend(legends)
 	plt.grid('on')
 	if not quiet:
 		print 'A plot window titled "'+title+'" is being displayed. You must close it before '+__name__+' can procede...'

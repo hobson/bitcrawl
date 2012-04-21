@@ -1,10 +1,15 @@
 #!/usr/bin/python
 """Crawls the web looking for quantitative information about bitcoin popularity.
 
-	Examples (require Internet connection):
-	>>> bitcrawl
+	Calculates the correlation coefficient between several numerical values
+	gleaned from webpages.
+	
+	The short sample set available for this contest entry revealed surprisingly 
+	strong correlation among several parameters, like wikipedia Bitcoin article
+	visit/view rates and bitcoin price.
 
-	MtGox price is $4.79240
+	Examples (require Internet connection):
+	> > python bitcrawl-script.py
 	
 	Standard Module Dependencies:
 		argparse	ArgumentParser
@@ -33,6 +38,7 @@
 	:license:   Creative Commons BY-NC-SA, see LICENSE for details"""
 
 import bitcrawl as bc
+from pprint import pprint
 from argparse import ArgumentParser
 from warnings import warn
 
@@ -52,6 +58,13 @@ def parse_args():
 		nargs   = '?',
 		default = 0,
 		help    = 'Retrieve this number of prices from the order book at bitfloor (TBD volume).',
+		)
+	p.add_argument(
+		'-l','--lead','--lag',
+		type    = int,
+		nargs   = '?',
+		default = 2,
+		help    = 'Compute the correlation coefficients for data that is lead by this amount of sample periods (days).',
 		)
 	p.add_argument(
 		'-g','--graph','--plot',
@@ -118,9 +131,7 @@ if __name__ == "__main__":
 	sites = []
 	values = []
 	if o.graph and isinstance(o.graph,list) and isinstance(o.graph[0],str):
-		print o.graph
 		for g in o.graph:
-			print g
 			[u,v] = g.split('.')
 			sites.append(u)
 			values.append(v)
@@ -128,18 +139,33 @@ if __name__ == "__main__":
 		u,v = g.split('.')
 		sites.append(u)
 		values.append(v)
+	
+	leads = [0]
+	if o.lead>0:
+		leads = range(min(o.lead+1, 10))
+	elif o.lead<0:
+		leads = range(max(o.lead-1,-10))
 
-	# This is the hard coded proof-of-concept forecasting algorithm
-	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-	print 'Correlation coefficient for the data series selected'
-	print '("wikipedia view rates for bitcoin page" and "MtGox bitcoin average" price)'
-	print ' is...'
-	print bc.forecast_data(columns=None, # reload historical data and extract values listed below
-							site=sites, # extract records for these websites
-							value=values, # use these values from those pages
-							quiet=True)
-	#TODO calculate for all paramters and find the maximum
-	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+	print '='*60
+	print 'Parameters for which correlation matrix was computed (in the order of matrix columns/rows):'
+	print '-'*60
+	pprint(o.graph,indent=2)
+	print '='*60
+	for lead in leads:
+		# This is the hard coded proof-of-concept forecasting algorithm
+		print '*'*60
+		print 'Pearson correlation coefficient(s) for a lead/lag of '+str(lead)
+		print '-'*60
+		C = bc.forecast_data(columns=None, # reload historical data and extract values listed below
+								site=sites, # extract records for these websites
+								value=values, # use these values from those pages
+								quiet=True,
+								lead=lead)
+		#pprint(C,indent=2)
+		for c in C:
+			print '[' + ', '.join('%+0.2f' % c1 for c1 in c) + ']'
+		#TODO calculate for all paramters and find the maximum
+		print '*'*60
 
 	bc.plot_data(columns=None,site=sites,value=values,normalize=True)
 
