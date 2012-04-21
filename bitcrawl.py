@@ -388,7 +388,8 @@ def interpolate(x,y,newx=None,method='linear'):
 	if not newx:
 		N = max(len(x),2)
 		newx = [float(x1*(x[-1]-x[0]))/(N-1)+x[0] for x1 in range(len(x))]
-	#print newx
+	#if newx and len(newx)>1:
+		#print make_wide(newx)
 	newy=[]
 	N=len(newx)
 	if method[0:3].lower()=='lin':
@@ -403,8 +404,8 @@ def interpolate(x,y,newx=None,method='linear'):
 					newy.append((float(y[i])-y0)*(float(newx[j])-x0)/(float(x[i])-x0)+y0)
 				else: #nearest neighbor is fine if interpolation distance is zero!
 					newy.append(float(y0))
-				if j==N-1: # we've finished the last newx value
-					break
+#				if j>=N-1: # we've finished the last newx value
+#					break
 				j = j+1
 		# no extrapolation, assume time stops ;)
 		for j in range(j,N):
@@ -426,7 +427,7 @@ def var2(listoflist):# assuming equal datetime intervals
 		averagelist.append(element[1])# appends average value from listoflist
 	sumlist = sum(averagelist)
 	meanavg = sumlist/len(averagelist)#mean of the list containing all the 'average' data
-	print'meanavg=',meanavg
+	#print'meanavg=',meanavg
 	for e in averagelist:
 		variance = variance + (e - meanavg)**2
 	variance = variance/len(averagelist)
@@ -705,17 +706,20 @@ def lag_correlate(A,B,lead=1):
 	has higher lag_correlation than unlagged (lock-step) data. But this doesn't
 	appear to be true generally. So this approach may be misguided.
 	
-	lag_correlate([1,2,3,2,1,2,3,2,1],[1,2,3,2,1,2,3,2,1])
-	32
-	lag_correlate([1,2,3,2,1,2,3,2,1],[2,3,2,1,2,3,2,1,2])
-	36
-	
+	>>> lag_correlate([1,2,3,2,1,2,3,2,1],[1,2,3,2,1,2,3,2,1],lead=1)
+	0.0
+	>>> lag_correlate([1,2,3,2,1,2,3,2,1],[2,3,2,1,2,3,2,1,2],lead=1)
+	0.8750000000000001
 	"""
 	if isinstance(A,list) and isinstance(B,list):
 		if isinstance(A[0],list) and isinstance(B[0],list):
 			A=make_wide(A)
 			B=make_wide(B)
-			return [lag_correlate(a,b) for a,b in zip(A,B)]
+			C = [[0. for a in A] for b in B]
+			for i,a in enumerate(A):
+				for j,b in enumerate(B):
+					C[i][j]=lag_correlate(a,b,lead)
+			return C
 		# TODO: this seems to be led rather than lagged!
 		return pearson(A[lead:],B[:-lead])
 	return None
@@ -745,6 +749,8 @@ def transpose_lists(lists):
 	"""
 	
 	N,M = size(lists)
+	if N <= 0 or M <=0:
+		return lists
 	
 	# create empty lists
 	result = []
@@ -906,6 +912,10 @@ def make_tall(lol):
 	"""
 	N,M = size(lol)
 	#print N,M
+	# if it's already a single-dimension array/list/vector then its already "wide"
+	# don't convert it to a 2-D matrix
+	if M <= 0:
+		return lol
 	if N<M:
 		lol=transpose_lists(lol)
 	return lol
@@ -922,6 +932,10 @@ def make_wide(lol):
 	"""
 	# TODO size() needs to handle high-dimensionality
 	N,M = size(lol)
+	# if it's already a single-dimension array/list/vector then its already "wide"
+	# don't convert it to a 2-D matrix
+	if M<=0: 
+		return lol
 	if N>M:
 		lol=transpose_lists(lol)
 	return lol
@@ -949,7 +963,7 @@ def unoffset(data,columns=[0]):
 
 def size(lol):
 	if lol:
-		return len(lol), max([ (len(L) if isinstance(L,(list,dict,set)) else 1) for L in lol])
+		return len(lol), max([ (len(L) if isinstance(L,(list,dict,set)) else 0) for L in lol])
 	else:
 		return None
 
@@ -1008,7 +1022,7 @@ def std(lol):
 		return sqrt(var(lol))
 	return sqrt(var(lol))
 
-def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], value=['average','view_rate_Bitcoin'],
+def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], value=['average','view_rate_Bitcoin'], lead=1,
                   title=__name__+' Forecast', quiet=False):
 	"""Correlate data with lag
 	
@@ -1041,9 +1055,10 @@ def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], va
 
 	# TODO: generalize the assumption that datetime is ordinal days
 	# interpolate to create regularly-space, e.g.daily, values
-	t = range(int(min(columns[0])),int(max(columns[0]))+1)
+	t = [float(x) for x in range(int(min(columns[0])),int(max(columns[0]))+1)]
+	#print size(t)
 	#print len(columns[0]), len(columns[1]), len(t)
-	columns[1] = interpolate(columns[0],columns[1],t)
+	columns[1] = interpolate(x=columns[0], y=columns[1], newx=t)
 	columns[0] = t
 	#print columns
 	i=1
@@ -1059,7 +1074,7 @@ def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], va
 				break
 			# interpolate the new data to line up in time with the original data
 			#print len(cols2[0]), len(cols2[1]),len(columns[0])
-			newrow = interpolate(cols2[0],cols2[1],columns[0])
+			newrow = interpolate(cols2[0],cols2[1],t)
 			#print newrow
 			#print columns
 			columns.append(newrow)
@@ -1068,7 +1083,7 @@ def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], va
 	rows = make_wide(columns)
 	#N,M = size(rows)
 	if len(rows)>2:
-		return lag_correlate(rows[1],rows[2])
+		return lag_correlate(rows[1:],rows[1:],lead=lead)
 	return None
 
 def columns2xy(columns):
@@ -1081,13 +1096,52 @@ def columns2xy(columns):
 	rows = make_wide(columns)
 	return make_tall([rows[0]]*(len(rows)-1)), make_tall(rows[1:])
 
-def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False):
+def col_normalize(columns):
+	"""Normalize each column so that it spans the range 0..1
+	
+	Helpful for plotting multiple quantities on the same scale.
+	Returns enough information to reconstruct the data or annotate the plot.
+	>>> col_normalize([[1,2e5],[2,5e5],[3,4e5]])
+	([[0.0, 0.0], [0.5, 1.0], [1.0, 0.6666666666666666]], [1, 200000.0], [2, 300000.0])
+	"""
+	rows = transpose_lists(columns)
+	sf = []
+	minr = []
+	for i,r in enumerate(rows):
+		maxr = max(r)
+		minr.append(min(r))
+		sf.append(maxr-minr[i])
+		for j,el in enumerate(r):
+			columns[j][i] = float(el-minr[i])/sf[i]
+	return columns,minr,sf # return enough data to recover the original
+
+def row_normalize(rows):
+	"""Normalize each row so that it spans the range 0..1
+	
+	Helpful for plotting multiple quantities on the same scale.
+	Returns enough information to reconstruct the data or annotate the plot.
+	>>> row_normalize([[1,2e5],[2,5e5],[3,4e5]])
+	([[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]], [1, 2, 3], [199999.0, 499998.0, 399997.0])
+	"""
+	sf = []
+	minr = []
+	for i,r in enumerate(rows):
+		maxr = max(r)
+		minr.append(min(r))
+		sf.append(maxr-minr[i])
+		for j,el in enumerate(r):
+			rows[i][j] = float(el-minr[i])/sf[i]
+	return rows,minr,sf # return enough data to recover the original
+
+		
+	
+def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False, normalize=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
 	Example 
 	# doctests will pause and user must close plot for this test to pass
 	>>> plot_data([[1,1],[2,4],[3,9]],quiet=True) # displays a plot, then, when you close the plot, prints this
-	[[1, 2, 3], [1, 4, 9]]
+	[[1, 1], [2, 4], [3, 9]]
 	"""
 	site = [site] if isinstance(site,str) else site
 	value = [value] if isinstance(value,str) else value
@@ -1114,24 +1168,30 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 
 	i=1
 	# only need to interpolate if more than one column is being plotted
-	if data and i<len(site):
+	if data and i<len(site) and columns:
+		t = columns[0]
 		while i<len(site):
 			s,v = site[i],value[i]
 			cols2 = byrow_key(data,name=s,yname=v,xname='datetime')
-			print size(cols2)
+			#print size(cols2)
 			# interpolate the new data to line up in time with the original data
-			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
-			print size(columns)
+			columns.append(interpolate(cols2[0],cols2[1],t))
+			#print size(columns)
 			i += 1
 
 	x,y = columns2xy(columns)
+	
+	if normalize==True:
+		y = col_normalize(y)
+	
+	#print size(x),size(y)
 	plt.plot(x,y)
 	plt.title(title)
 	plt.grid('on')
 	if not quiet:
 		print 'A plot window titled "'+title+'" is being displayed. You must close it before '+__name__+' can procede...'
 		plt.show()
-	return rows
+	return columns
 
 
 if __name__ == "__main__":

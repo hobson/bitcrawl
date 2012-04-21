@@ -141,7 +141,7 @@ if __name__ == "__main__":
 	#TODO calculate for all paramters and find the maximum
 	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 
-	bc.plot_data(columns=None,site=sites,value=values)
+	bc.plot_data(columns=None,site=sites,value=values,normalize=True)
 
 	if not o.nomine:
 		# mine hard-coded urls
