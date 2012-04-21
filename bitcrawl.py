@@ -53,6 +53,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 FILENAME=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
+MIN_ORDINAL=1800*365.25 # data associated with datetime ordinals smaller than this will be ignored
+MAX_ORDINAL=2100*365.25 # data associated with datetime ordinals larger than this will be ignored
 
 # Hard-coded regular expressions, keywords, and URLs for gleaning numerical data from the web
 URLs={'network': 
@@ -591,18 +593,14 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 			#print '-------- found '+name
 			keyrecord = record[name]
 			#print 'keyrecord=',keyrecord
-			columns.append([])# add an empty row to hold the new data
 			# is the requested x data name in the dictionary for the record?
-			#print 'looking for '+xname
-			if xname in keyrecord:
+			# don't create a list entry for data points unless both x and y are available
+			if xname in keyrecord and yname in keyrecord:
 				# add the time to the empty row
-				columns[-1].append(datetime2float(str2datetime(keyrecord[xname])))
-			#print 'looking for '+yname
-			if yname in keyrecord:
-				# float() won't work if there's a dollar sign in the value/price, so get rid of it
+				dt = datetime2float(str2datetime(keyrecord[xname]))
 				value = str2float(keyrecord[yname])
-				# add the value to the last row
-				columns[-1].append(value)
+				if dt and value and MIN_ORDINAL <= dt <= MAX_ORDINAL: # dates before 1800 don't make sense
+					columns.append([dt,value])
 	if verbose:
 		pprint.pprint(columns,indent=2)
 	return columns
@@ -1073,6 +1071,16 @@ def forecast_data(columns=None, site=['mtgox','wikipedia_view_rate_Bitcoin'], va
 		return lag_correlate(rows[1],rows[2])
 	return None
 
+def columns2xy(columns):
+	"""
+	Creates matrices suitable for matplotlib.pyplot.plot(x,y)
+	
+	>>> columns2xy([range(3),[x**1.3 for x in range(3)],[3.*x for x in range(3)]])
+	([[0, 0], [1, 1], [2, 2]], [[0.0, 0.0], [1.0, 3.0], [2.4622888266898326, 6.0]])
+	"""
+	rows = make_wide(columns)
+	return make_tall([rows[0]]*(len(rows)-1)), make_tall(rows[1:])
+
 def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' Data', quiet=False):
 	"""Plot 2-D points in first to columns in a list of lists
 	
@@ -1104,31 +1112,27 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 		warn('Unable to plot data of type '+str(type(columns)))
 		return None
 
-	
 	i=1
+	# only need to interpolate if more than one column is being plotted
 	if data and i<len(site):
 		while i<len(site):
 			s,v = site[i],value[i]
 			cols2 = byrow_key(data,name=s,yname=v,xname='datetime')
+			print size(cols2)
 			# interpolate the new data to line up in time with the original data
 			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
+			print size(columns)
 			i += 1
-	
-	rows = make_wide(columns)
-	#N,M = size(rows)
-	
-	plt.plot(make_tall([rows[0]]),make_tall(rows[1:]))
+
+	x,y = columns2xy(columns)
+	plt.plot(x,y)
+	plt.title(title)
+	plt.grid('on')
 	if not quiet:
 		print 'A plot window titled "'+title+'" is being displayed. You must close it before '+__name__+' can procede...'
-	plt.grid('on')
-	plt.show()
+		plt.show()
 	return rows
 
-# plt.plot('yourdata') plots your data, plt.show() displays the figure.
-# Json data needs to be transposed.
-# plt.xlabel('some text') = adds label on x axis
-# plt.ylabel('some text') = adds label on y axis
-# plt.title('Title') = adds title
 
 if __name__ == "__main__":
 	import doctest

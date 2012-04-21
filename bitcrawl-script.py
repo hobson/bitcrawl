@@ -56,7 +56,7 @@ def parse_args():
 	p.add_argument(
 		'-g','--graph','--plot',
 		nargs = '*',
-		default = ['mtgox.average', 'mtgox.last','mtgox.low', 'mtgox.high', 'shop.visits','bitcoin.visits','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin', 'mtgox.wikipedia_view_rate_Bitcoin.view_rate_Bitcoin', 'wikipedia_view_rate_James_Surowiecki.view_rate_James_Surowiecki'],
+		default = ['mtgox.average', 'mtgox.last','mtgox.low', 'mtgox.high', 'shop.visits','bitcoin.visits','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin', 'wikipedia_view_rate_James_Surowiecki.view_rate_James_Surowiecki'],
 		help    = 'List of values to plot.',
 		)
 	p.add_argument(
@@ -118,7 +118,10 @@ if __name__ == "__main__":
 	sites = []
 	values = []
 	if o.graph and isinstance(o.graph,list) and isinstance(o.graph[0],str):
-		for u,v in [g.split('.') for g in o.graph]:
+		print o.graph
+		for g in o.graph:
+			print g
+			[u,v] = g.split('.')
 			sites.append(u)
 			values.append(v)
 	elif o.graph and isinstance(o.graph,str):
@@ -138,9 +141,7 @@ if __name__ == "__main__":
 	#TODO calculate for all paramters and find the maximum
 	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 
-	if o.graph and isinstance(o.graph,list) and isinstance(o.graph[0],str):
-			bc.plot_data(columns=None,site=u,value=v,title=u+'--'+v)
-		bc.plot_data(columns=None,site=u,value=v)
+	bc.plot_data(columns=None,site=sites,value=values)
 
 	if not o.nomine:
 		# mine hard-coded urls
