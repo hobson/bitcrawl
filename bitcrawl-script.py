@@ -51,11 +51,12 @@ def parse_args():
 		type    = int,
 		nargs   = '?',
 		default = 0,
-		help    = 'Retrieve N prices from the order book at bitfloor.',
+		help    = 'Retrieve this number of prices from the order book at bitfloor (TBD volume).',
 		)
 	p.add_argument(
 		'-g','--graph','--plot',
-		default = 'mtgox.average',
+		nargs = '*',
+		default = ['mtgox.average', 'mtgox.last','mtgox.low', 'mtgox.high', 'shop.visits','bitcoin.visits','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin', 'mtgox.wikipedia_view_rate_Bitcoin.view_rate_Bitcoin', 'wikipedia_view_rate_James_Surowiecki.view_rate_James_Surowiecki'],
 		help    = 'List of values to plot.',
 		)
 	p.add_argument(
@@ -92,31 +93,11 @@ def parse_args():
 		help    = "Don't output anything to stdout, not even the numerical values minded. Overrides verbose setting.",
 		)
 	p.add_argument(
-		'-t','--tab',
-		action  = 'store_true',
-		default = False,
-		help    = "In the output file, precede numerical data with a tab (column separator).",
-		)
-	p.add_argument(
 		'-n','--no-mine','--no-mining','--no-data','--no-datamining','--no-crawl','--no-crawling',
 		dest    = 'nomine',
 		action  = 'store_true',
 		default = False,
 		help    = "Don't crawl the internet for numerical data.",
-		)
-	p.add_argument(
-		'-s','--separator','-c','--column-separator',
-		metavar = 'SEP',
-		type    = str,
-		default = '',
-		help    = "In the output file, precede numberical data with the indicated string as a column separator.",
-		)
-	p.add_argument(
-		'-m','--max','--max-results',
-		metavar = 'N',
-		type=int,
-		default = 1,
-		help    = 'Limit the maximum number of results.',
 		)
 	p.add_argument(
 		'-f','--path','--filename',
@@ -134,22 +115,32 @@ if __name__ == "__main__":
 	if not o.quiet or o.verbose:
 		data = bc.load_json(filename=o.path,verbose='Historical data...') # verbose means the data will print out with that as the heading
 
+	sites = []
+	values = []
+	if o.graph and isinstance(o.graph,list) and isinstance(o.graph[0],str):
+		for u,v in [g.split('.') for g in o.graph]:
+			sites.append(u)
+			values.append(v)
+	elif o.graph and isinstance(o.graph,str):
+		u,v = g.split('.')
+		sites.append(u)
+		values.append(v)
+
 	# This is the hard coded proof-of-concept forecasting algorithm
 	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 	print 'Correlation coefficient for the data series selected'
 	print '("wikipedia view rates for bitcoin page" and "MtGox bitcoin average" price)'
 	print ' is...'
-	print bc.forecast_data(columns=None, # reload historical data
-							site=['mtgox','wikipedia_view_rate_Bitcoin'], # extract records for these websites
-							value=['average','view_rate_Bitcoin'], # use these values from those pages
+	print bc.forecast_data(columns=None, # reload historical data and extract values listed below
+							site=sites, # extract records for these websites
+							value=values, # use these values from those pages
 							quiet=True)
 	#TODO calculate for all paramters and find the maximum
 	print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 
-	if o.graph and isinstance(o.graph,str):
-		u,v = o.graph.split('.')
+	if o.graph and isinstance(o.graph,list) and isinstance(o.graph[0],str):
+			bc.plot_data(columns=None,site=u,value=v,title=u+'--'+v)
 		bc.plot_data(columns=None,site=u,value=v)
-	
 
 	if not o.nomine:
 		# mine hard-coded urls

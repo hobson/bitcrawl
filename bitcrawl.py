@@ -595,22 +595,79 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 			# is the requested x data name in the dictionary for the record?
 			#print 'looking for '+xname
 			if xname in keyrecord:
-				#print '-------- found '+xname
 				# add the time to the empty row
-				# leave it as a string and I'll convert to a value
-				dt = datetime.datetime.strptime(keyrecord[xname][0:-6],"%Y-%m-%d %H:%M:%S.%f")
-				dt_value = float(dt.toordinal())+dt.hour/24.+dt.minute/24./60.+dt.second/24./3600.
-				columns[-1].append(dt_value)
+				columns[-1].append(datetime2float(str2datetime(keyrecord[xname])))
 			#print 'looking for '+yname
 			if yname in keyrecord:
-				#print '-------- found '+yname
 				# float() won't work if there's a dollar sign in the value/price, so get rid of it
-				value = float(keyrecord[yname].strip().strip('$').strip())
+				value = str2float(keyrecord[yname])
 				# add the value to the last row
 				columns[-1].append(value)
 	if verbose:
 		pprint.pprint(columns,indent=2)
 	return columns
+
+def str2datetime(s=datetime.datetime.fromordinal(1)):
+	"""
+	Convert string contain date and time into a datetime object.
+	
+	WARNING:
+	Only works with datetime generated strings.that have a 6-character
+	GMT time-zone offset at the end of the string.
+	And this offset is not processed.
+	
+	TODO: use more general natural language algorithm.
+	
+	Examples:
+	>>> str2datetime('2012-04-20 23:59:59.999999+08:00')
+	datetime.datetime(2012, 4, 20, 23, 59, 59, 999999)
+	"""
+	return datetime.datetime.strptime(s[0:-6],"%Y-%m-%d %H:%M:%S.%f")
+
+def str2float(s=''):
+	"""Convert value string from a webpage into a float
+	
+	Processes commas, units, and magnitude letters (G or B,K or k,M,m)
+	>>> str2float('$5.125 M USD')
+	5125000.0
+	"""
+	# save the original string for warning message printout and debugging
+	s0 = s
+	s = s.strip()
+	mag = 1.
+	scale = 1.
+	# TODO: add more (all Standard International prefixes)
+	mags = {'G':1e9,'M':1e6,'k':1e3,'K':1e3,'m':1e-3}
+	# factors just for reference not for conversion
+	# TODO: pull factors from most recent conversion rate data in historical file or config file?
+	# TODO: add national currencies and a few digital ones (e.g. Linden dollars)
+	units = {'$':1.,'USD':1.,'AUD':1.3,'BTC':5.,'EU':2.,'bit':1e-3} 
+	# TODO: DRY-out
+	s=s.strip()
+	if s.lower().find('kb')>=0:
+		s=s.replace('KB','K').replace('kb','K').replace('Kb','K').replace('kB','K')
+	for k,m in mags.items():
+		if s.rfind(k) >= 0:
+			mag *= m
+			s=s.replace(k,'')
+	for k,u in units.items():
+		s=s.replace(k,'') 
+		# scale/units-value unused, TODO: return in a tuple?
+		scale *= u
+	s=s.strip()
+	try:
+		return float( s.replace(',','').strip() )*mag
+	except:
+		warn('Unable to interpret string "'+s0+'"->"'+s+'" as a number')
+	return s
+
+def datetime2float(dt=None):
+	"""Convert datetime object to a float, the ordinal number of days since epoch (0001-01-01 00:00:00)
+	
+	>>> datetime2float(datetime.datetime(2012,4,20,23,59,59,999999))
+	734613.999988426
+	"""
+	return float(dt.toordinal())+dt.hour/24.+dt.minute/24./60.+dt.second/24./3600.
 
 def byrow_key(data, name='mtgox', yname='average', xname='datetime',verbose=False):
 	#function for returning values given a key of the dictionary data
@@ -1039,10 +1096,10 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 	# TODO: load data inside one set of conditionals, then extrace columns in another set of conditionals
 	if not columns:
 		data = load_json()
-		columns = make_wide(bycol_key(data,name=site[0],yname=value[0],xname='datetime'))
+		columns = byrow_key(data,name=site[0],yname=value[0],xname='datetime')
 	if isinstance(columns, str):
 		data = load_json(path=columns)
-		columns = make_wide(bycol_key(data,name=site[0],yname=value[0],xname='datetime'))
+		columns = byrow_key(data,name=site[0],yname=value[0],xname='datetime')
 	if not (isinstance(columns,list) and isinstance(columns[0],list)):
 		warn('Unable to plot data of type '+str(type(columns)))
 		return None
@@ -1052,7 +1109,7 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title=__name__+' 
 	if data and i<len(site):
 		while i<len(site):
 			s,v = site[i],value[i]
-			cols2 = bycol_key(data,name=s,yname=v,xname='datetime')
+			cols2 = byrow_key(data,name=s,yname=v,xname='datetime')
 			# interpolate the new data to line up in time with the original data
 			columns.append(interpolate(cols2[0],cols2[1],columns[0]))
 			i += 1
