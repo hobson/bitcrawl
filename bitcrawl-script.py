@@ -33,6 +33,10 @@
 	   b) write a browser plugin that allows a human to supervise the machine learning and identify useful/relevant quantitative data
 	5. implement the indexer and search engine for the double-star question 3 in CS101 and get quant data directly from the index
 	6. implement the levetshire distance algorithm from the CS101 exam for use in word-stemming and search term similarity estimate
+	7. add query to .forecast_data() & .plot_data(): "bitfloor.bids[0][0]"
+	8. add query to .forecast_data() & .plot_data(): "mean(bitfloor.bids[:][0])"
+	9. add query to .forecast_data() & .plot_data(): "diff(mtgox.last)"
+
 
 	:copyright: 2012 by Hobson Lane (hobson@totalgood.com), see AUTHORS for details
 	:license:   Creative Commons BY-NC-SA, see LICENSE for details"""
@@ -69,7 +73,7 @@ def parse_args():
 	p.add_argument(
 		'-g','--graph','--plot',
 		nargs = '*',
-		default = ['mtgox.average', 'mtgox.last','mtgox.low', 'mtgox.high', 'shop.visits','bitcoin.visits','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin', 'wikipedia_view_rate_James_Surowiecki.view_rate_James_Surowiecki'],
+		default = ['mtgox.average', 'mtgox.last', 'shop.visits','bitcoin.visits','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin'],
 		help    = 'List of values to plot.',
 		)
 	p.add_argument(
@@ -128,23 +132,14 @@ if __name__ == "__main__":
 	if not o.quiet or o.verbose:
 		data = bc.load_json(filename=o.path,verbose='Historical data...') # verbose means the data will print out with that as the heading
 
-	sites = []
-	values = []
-	if o.graph and isinstance(o.graph,list) and isinstance(o.graph[0],str):
-		for g in o.graph:
-			[u,v] = g.split('.')
-			sites.append(u)
-			values.append(v)
-	elif o.graph and isinstance(o.graph,str):
-		u,v = g.split('.')
-		sites.append(u)
-		values.append(v)
-	
 	leads = [0]
 	if o.lead>0:
 		leads = range(min(o.lead+1, 10))
 	elif o.lead<0:
 		leads = range(max(o.lead-1,-10))
+
+	sites, values, datetimes = bc.parse_query(o.graph)
+	rows = retrieve_data(sites,values,datetimes)
 
 	print '='*60
 	print 'Parameters for which correlation matrix was computed (in the order of matrix columns/rows):'
@@ -156,11 +151,7 @@ if __name__ == "__main__":
 		print '*'*60
 		print 'Pearson correlation coefficient(s) for a lead/lag of '+str(lead)
 		print '-'*60
-		C = bc.forecast_data(columns=None, # reload historical data and extract values listed below
-								site=sites, # extract records for these websites
-								value=values, # use these values from those pages
-								quiet=True,
-								lead=lead)
+		C = lag_correlate(A=rows[1:],B=rows[1:],lead=lead)
 		#pprint(C,indent=2)
 		for c in C:
 			print '[' + ', '.join('%+0.2f' % c1 for c1 in c) + ']'
