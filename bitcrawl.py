@@ -49,10 +49,9 @@ from pprint import pprint
 from argparse import ArgumentParser
 import re
 from warnings import warn
-import numpy as np
 import matplotlib.pyplot as plt
 
-FILENAME=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
+FILEPATH=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 MIN_ORDINAL=1800*365.25 # data associated with datetime ordinals smaller than this will be ignored
 MAX_ORDINAL=2100*365.25 # data associated with datetime ordinals larger than this will be ignored
 SAMPLE_BIAS_COMP = 0 # whether to divide variance values by N-1 (0 divides by N so that small sample sets still give 1 for Pearson self-correlation coefficient)
@@ -206,20 +205,22 @@ class Bot:
         if possible should use the get_page() code from the CS101 examples to show "relevance" for the contest
 
     Examples:
-    >>> 1000 < len(Bot().GET('http://totalgood.com')) < 1e7
-    True
+    >>> len(Bot().GET('http://totalgood.com',retries=1,delay=0,len=100))
+    100
     """
 
     def __init__(self):
+        self.retries     = 0
         self.response    = ''
         self.params      = ''
         self.url         = ''
         redirecter  = urllib2.HTTPRedirectHandler()
         cookies     = urllib2.HTTPCookieProcessor()
         self.opener = urllib2.build_opener(redirecter, cookies)
-    def GET(self, url,max_retries=10,retry_delay=3):
+    def GET(self, url, retries=2, delay=2, len=1e7):
+        self.retries = max(self.retries, retries)
         # don't wait less than 0.1 s or longer than 1 hr when retrying a network connection
-        retry_delay = min(max(retry_delay,0.1),3600)
+        delay = min(max(delay,0.1),3600)
         file_object, datastr = None, ''
         try:
             file_object = self.opener.open(url)
@@ -235,22 +236,23 @@ class Bot:
             print "Network error for URL '"+url+"': %s" % e.reason.args[1]
         if not file_object:
             # retry
-            if max_retries:
-                print "Waiting "+str(retry_delay)+" seconds before retrying network connection for URL '"+url+"'..."
-                print "Retries left = "+str(max_retries)
-                time.sleep(retry_delay)
+            if retries:
+                print "Waiting "+str(delay)+" seconds before retrying network connection for URL '"+url+"'..."
+                print "Retries left = "+str(retries)
+                time.sleep(delay)
                 print "Retrying network connection for URL '"+url+"'."
-                return self.GET(url,max_retries-1)
+                return self.GET(url,retries-1)
             print "Exceeded maximum number of Network error retries."
         else:
             try:
-                datastr = file_object.read() # should populate datastr with an empty string if the file_object is invalid, right?
+                datastr = file_object.read(len) # should populate datastr with an empty string if the file_object is invalid, right?
             except:
-                print 'Error reading http GET response'
+                print('Error reading http GET response from url '+repr(url)+
+                      ' after at most '+str(self.retries)+' retries.')
         return datastr
     def POST(self, url, params):
         self.url    = url
-        self.params = urllib.urlencode(parameters)
+        self.params = urllib.urlencode(params)
         self.response = self.opener.open(url, self.params ).read()
         return self.response
 
@@ -311,17 +313,17 @@ TIME_PATTERN = re.compile(r"""
 
 DATETIME_PATTERN = re.compile(r'(?P<date>'+DATE_PATTERN.pattern+
                               r')(?:'+QUANT_PATTERNS['DATE_SEP']+
-                              r')?(?P<time>'+TIME_PATTERN.pattern+r')', re.X)
+                              r')?(?P<time>'+TIME_PATTERN.pattern+r')?', re.X)
 
 def zero_if_none(x):
-	if not x:
-		return 0
-	return x
+    if not x:
+        return 0
+    return x
 
 def parse_date(s):
-    """Uses complicated nested regular expressions to proces date-time strings and doesn't work!
+    """Nested regular expressions to proces date-time strings
 
-    >>> bc.parse_date('2001-2-3 4:56:54.123456789')
+    >>> parse_date('2001-2-3 4:56:54.123456789')
     datetime.datetime(2001, 2, 3, 4, 56, 54, 123456)
     Values for seconds or minutes that exceed 60 are ignored
     >>> parse_date('2001-2-3 4:56:78.910')
@@ -333,7 +335,6 @@ def parse_date(s):
     >>> parse_date('2012-04-12 13:34')
     datetime.datetime(2012, 4, 20, 13, 34)
     """
-    from datetime import datetime
     from math import floor
 
     mo=DATETIME_PATTERN.search(s)
@@ -354,9 +355,29 @@ def parse_date(s):
         s_f = float(zero_if_none(mo.group('s')))
         s = int(floor(s_f))
         us = int((s_f-s)*1000000.0)
-        return datetime(y,mon,d,h,m,s,us)
+        return datetime.datetime(y,mon,d,h,m,s,us)
     else:
         raise ValueError("Date time string not recognizeable or not within a valid date range (2199 BC to 2199 AD): %s" % s)
+
+def parse_time(s):
+    """Nested regular expressions to time strings
+
+    >>> parse_time('4:56:54.123456789')
+    datetime.time(4, 56, 54, 123456)
+    """
+    from math import floor
+
+    mo=TIME_PATTERN.search(s)
+    if mo:
+        h = int(zero_if_none(mo.group('h')))
+        m = int(zero_if_none(mo.group('m')))
+        s_f = float(zero_if_none(mo.group('s')))
+        s = int(floor(s_f))
+        us = int((s_f-s)*1000000.0)
+        # FIXME: parse the AM/PM bit
+        return datetime.time(h,m,s,us)
+    else:
+        raise ValueError("Time string not recognizeable or not within a valid date range (00:00:00 to 24:00:00): %s" % s)
 
 def get_next_target(page):
     """Extract a URL from a string (HTML for a webpage)
@@ -411,9 +432,6 @@ def interpolate(x,y,newx=None,method='linear'):
         return [ interpolate(x1,y1,newx,method) for x1,y1 in zip(x,y) ]
     # TODO: now that we're at the innermost dimension of the 2 lists, we need
     #       to check that the length of the x and y and/or newx lists match
-    print x
-    print y
-    print newx
     # TODO: sort x,y (together as pairs of tuples) before interpolating, then unsort when done
     if not newx:
         N = max(len(x),2)
@@ -614,22 +632,39 @@ def updateable(path,initial_content='',min_size=0):
             return True
         return False
 
+def parse_index(s):
+    """Parses an array/list/matrix index string.
+    
+    >>> parse_index('[1][2]')
+    [1, 2]
+    >>> parse_index('(3 2 1)')
+    [3, 2, 1]
+    """
+    #return (0)
+    mo=re.match(r'[\[\(\{]+\s*(\d(?:\s*[:]\s*\d){0,2})+(?:\s*[\[\(\{\]\)\},; \t]\s*)+(\d(?:\s*[:]\s*\d){0,2})+\s*[\]\)\}]+',s)
+    # FIXME: needs to subparse the slice notation, e.g. '1:2:3'
+    # this only handles single indexes
+    return [int(s) for s in mo.groups()]
+
 def parse_query(q):
     """Parse query string identifing records in bitcrawl_historical_data.json
 
-    Returns a two equal-length lists
+    Returns a 3 equal-length lists
         sites  = a name (key) for the webpage where data was originally found
         values = the key for the values on the webpages identified by sites
+        datetimes = list of lists with the datetimes for which data is desired
 
     Friendlier interface for bycol_key() which is turn used for
     forecast_data() & plot_data()
 
-    >>> query('bitfloor.bids[0][0] date:2012-04-122 13:35')
-    4.88
+    >>> parse_query('bitfloor.bids[0][0] date:2012-04-12 13:35')
+    (['bitfloor'], ['bids'],...)
     """
+    # print 'query', q
     if q and isinstance(q,(list,set)): # a tuple is the return value for a single query string!
-        retval = transpose_lists([ parse_query(s) for s in q ])
-        return retval[0],retval[1],retval[2]
+        retval = [ parse_query(s) for s in q ]
+        retval = transpose_lists(retval)
+        return retval[0], retval[1], retval[2]
     sites = []
     values = []
     datetimes = []
@@ -638,12 +673,26 @@ def parse_query(q):
         tok = q.split(' ') # only space may separate query terms from tags
         u,v = tok[0].split('.')
         sites.append(u)
-        values.append(v)
+        # FIXME: this will break if different types of braces are used in a row
+        n = max(v.find('['),v.find('('),v.find('{'))
+        if n>-1:
+            values.append(v[:n])
+            indexes=parse_index(v[n:])
+        else:
+            values.append(v)
         datetimes.append([])
-        for t in tok[1:]:
-            if t.startswith('date=:'):
+        i = 1 # the first token must always be the site.value "URI"
+        while i < len(tok):
+            t = tok[i]
+            i += 1
+            # print 'tok',tok
+            if t.lower().startswith('date') and len(t)>5 and t[4] in ":= \t|,;":
+                if i<len(tok):
+                    if isinstance(parse_time(tok[i]),datetime.time):
+                        t += ' '+str(tok[i])
+                        i += 1
                 datetimes[-1].append(parse_date(t[6:]))
-
+                
     # FIXME: this is no longer required for auto-correlation, unless you just want to double-check the algorithm
     #sites = [sites,sites] if isinstance(sites,str) else sites
     #values = [values,values] if isinstance(values,str) else values
@@ -655,7 +704,7 @@ def parse_query(q):
 #    print '-'*10
 #    print datetimes
 #    print '-'*10
-    return sites,values,datetimes
+    return sites, values, datetimes
     #return (s[0] for s in sitevalues, datetimes
 #    warn('Unable to identify the sites and values that query string attempted to retrieve. '+
 #        ' \n query  = '+ str(q)+
@@ -667,9 +716,14 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
     """
     Retrieve data from bitcrawl_historical_data.json for sites and values specified
 
+    Surprisingly this doesn't retrieve the volumes, just the prices for bf bids
     >>> retrieve_data('bitfloor','bids', ['2012-04-12 13:34','2012-04-12 13:35'])
-    4.88
+    [[734605.0], [[[4.88], [4.87], [4.86], ... [4.6], [4.59], [4.58]]]]
     """
+    #print '+'*10
+    #print sites
+    #print '+'*10
+    #print values
     if isinstance(sites,list) and isinstance(values,list):
         return     [ retrieve_data(s,v)      for s,v in zip(sites,values) ]
     if isinstance(sites,list) or isinstance(values,list):
@@ -679,7 +733,7 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
             return [ retrieve_data(sites, v) for v   in values            ]
     rows = []
     if isinstance(values,str) and isinstance(sites,str):
-        data = load_json(filepath) # None filepath loads data from default path
+        data = load_json(filepath,verbose=False) # None filepath loads data from default path
         if not data:
             warn('Historical data could not be loaded from '+repr(filepath))
             return []
@@ -692,6 +746,9 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
              ' using site key '+repr(sites)+' and value key '+repr(values))
         return None
 
+    if not rows:
+        return rows
+
     t = []
     if not datetimes:
         # interpolate columns data to create regularly-space, e.g.daily or bi-daily, values
@@ -699,7 +756,8 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
                                      int(max(rows[0]))+1)]
     else:
         t = datetime2float(datetimes) # this will be a float or list of floats
-
+    print size(t)
+    print size(rows)
     rows[1] = interpolate(x=rows[0], y=rows[1], newx=t)
     rows[0] = t
 
@@ -718,7 +776,6 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
         #print columns
         i += 1
     return rows
-    
 
 def query_data(q,filepath=None):
     """Retrieve data from bitcrawl_historical_data.json that matches a query string
@@ -726,11 +783,12 @@ def query_data(q,filepath=None):
     Friendlier interface for bycol_key() which is turn used for
     forecast_data() & plot_data()
 
-    >>> query('bitfloor.bids[0][0] date:2012-04-122 13:35')
+    >>> query_data('bitfloor.bids[0][0] date:2012-04-12 13:35')
     4.88
     """
-    sites, values, slices, mindate, maxdata = parse_query(q)
-    return retrieve_records(sites,values,filepath,slices, mindate, maxdate)
+    sites, values, datetimes = parse_query(q)
+    return retrieve_data(sites=sites, values=values, 
+                         datetimes=datetimes, filepath=filepath)
 
 
 
@@ -752,7 +810,7 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
             if xname in keyrecord and yname in keyrecord:
                 # add the time to the empty row
                 dt = datetime2float(parse_date(keyrecord[xname]))
-                value = record2float(keyrecord[yname])
+                value = list2float(keyrecord[yname])
                 if dt and value and MIN_ORDINAL <= dt <= MAX_ORDINAL: # dates before 1800 don't make sense
                     columns.append([dt,value])
     if verbose:
@@ -762,23 +820,6 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
 def byrow_key(data, name='mtgox', yname='average', xname='datetime',verbose=False):
     cols = bycol_key(data=data, name=name, yname=yname, xname=xname,verbose=verbose)
     return(transpose_lists(cols))
-
-
-#def str2datetime(s=datetime.datetime.fromordinal(1)):
-#    """
-#    Convert string contain date and time into a datetime object.
-
-#    WARNING:
-#    Extremely fragile.
-#    Only works with datetime generated strings.that have a 6-character
-#    GMT time-zone offset at the end of the string.
-#    And this offset is not processed.
-
-#    Examples:
-#    >>> str2datetime('2012-04-20 23:59:59.999999+08:00')
-#    datetime.datetime(2012, 4, 20, 23, 59, 59, 999999)
-#    """
-#    return datetime.datetime.strptime(s[0:-6],"%Y-%m-%d %H:%M:%S.%f")
 
 def str2float(s=''):
     """Convert value string from a webpage into a float
@@ -792,8 +833,15 @@ def str2float(s=''):
         return float(s)
     except:
         pass
-    s0 = s
-    s = s.strip()
+    try:
+        s0 = str(s)
+    except:
+        try:
+            s0 = unicode(s)
+        except:
+            raise ValueError('Unable to interpret string '+repr(s)+' as a float')
+        warn('Non-ascii object '+repr(s)+' passed to str2float')
+    s = s0.strip()
     mag = 1.
     scale = 1.
     # TODO: add more (all Standard International prefixes)
@@ -818,25 +866,32 @@ def str2float(s=''):
     try:
         return float( s.replace(',','').strip() )*mag
     except:
-        warn('Unable to interpret string "'+s0+'"->"'+s+'" as a number')
-    return s
+        warn('Unable to interpret string '+repr(s0)+'->'+repr(s)+' as a number')
+    return s # could return None
 
-def record2float(s=''):
-    """Convert a json record into a float or multi-dimensional list of floats
+def list2float(s=''):
+    """Convert a multi-dimensional list of strings to a multi-D list of floats
 
     Processes commas, units, and magnitude letters (G or B,K or k,M,m)
-    >>> record2float([['$5.125 M USD','0.123 kB'],[1e-9]])
-    [5125000.0, 123.0]
+    >>> list2float([['$5.125 M USD','0.123 kB'],[1e-9]])
+    [[5125000.0, 123.0], [1e-09]]
     """
-    # converts some common iterables into lists
-    if isinstance(s,(list,set,tuple)): 
-        return [record2float(x) for x in s]
+    # convert some common iterables into lists
+    if isinstance(s,(list,set,tuple)):
+        return [list2float(x) for x in s]
     try:
+        # maybe one day the float conversion will be 'vectorized'! ;)
         return float(s)
     except:
-        if not isinstance(s,str):
-            warn("Unable to interpret non-string data "+repr(s))
-        return str2float(s)
+        if not s:
+            return NaN
+        if not isinstance(s,(str,unicode)):
+            warn("Unable to interpret non-string data "+repr(s)+" which is of type "+str(type(s)))
+        # convert bools and NoneTypes to 0. Empty lists have already returned.
+        if not s:
+            return 0.
+        # TODO: check tg.nlp.is_bool() before converting to numerical float
+        return str2float(s) 
 
 def datetime2float(dt=None):
     """Convert datetime object to a float, the ordinal number of days since epoch (0001-01-01 00:00:00)
@@ -847,8 +902,8 @@ def datetime2float(dt=None):
     if isinstance(dt,(list,set,tuple)):
         if len(dt)==2: # 2-length date vectors are interpreted as the bounds of a daily series
             # min max slice shenanigans is to get this snippet closer to something more general
-            dt = [ min( datetime2float(datetimes[:-1])), 
-                   max( datetime2float(datetimes[-1:])) ] 
+            dt = [ min( datetime2float(dt[:-1])), 
+                   max( datetime2float(dt[-1:])) ] 
             return [ float(x) for x in range(int(min(dt)), int(max(dt))+1) ]
         else:
             return [ datetime2float(x) for x in dt ]
@@ -894,15 +949,16 @@ def lag_correlate(A,B,lead=1):
     instead of 1.0 due to division by N-1 instead of N
 
     """
-    if isinstance(A,list) and isinstance(B,list):
+    # TODO: this is wrong, A and B could be 1-length lists and this should still work
+    if isinstance(A,list) and isinstance(B,list) and len(A)>0 and len(B)>0:
         if isinstance(A[0],list) and isinstance(B[0],list):
             Na,Ma = size(A)
             Nb,Mb = size(B)
             if Ma==Nb and Na==Nb and Nb != Na:
                 if   Nb > Na:
-                    A = transpose_list(A)
+                    A = transpose_lists(A)
                 else:
-                    B = transpose_list(B)
+                    B = transpose_lists(B)
             #A=make_wide(A)
             #B=make_wide(B)
             C = [[0. for a in A] for b in B]
@@ -917,6 +973,7 @@ def lag_correlate(A,B,lead=1):
             return pearson(A[ :L],B[-L:  ])
         else:
             return pearson(A     ,B       )
+    return None
 
 def combo_correlate(A,B):
     """Correlate every row in A with every row in B
@@ -940,9 +997,8 @@ def transpose_lists(lists):
     >>> transpose_lists([[0, 1, 2, 3], [4, 5, 6, 7, 8], [9, 10, 11]])
     [[0, 4, 9], [1, 5, 10], [2, 6, 11], [3, 7], [8]]
     """
-
     N,M = size(lists)
-    if N <= 0 or M <=0:
+    if not (N > 0 and M > 0):
         return lists
 
     # create empty lists
@@ -959,9 +1015,6 @@ def transpose_lists(lists):
     return result
 
 def test_read_json(verbose=False):
-    import json
-    import datetime
-
     #data is a list of dictionaries obtained from the json file
     data = load_json()
 
@@ -984,25 +1037,40 @@ def test_read_json(verbose=False):
         assert l[0]>73400
         assert l[1]>0.1 and l[1]<25.0
 
-def load_json(filename=FILENAME, verbose=False):
-    if not filename:
-        filename = FILENAME
-    if verbose:  print 'Loading json data from "'+filename+'"'
+def load_json(filepath=FILEPATH, verbose=-3):
+    """Load into memory the historical bitcrawl data from database or flat file
+    
+    Example to load all data but print to the screen on the first record
+    > > load_json('data/bitcrawl_historical_data.json',verbose=1)
+    Loading data from ...
+    """
+    
+    display_recs = 1e5
+    if not filepath:
+        filepath = FILEPATH
+    if verbose:  
+        try:
+            display_recs = int(float(verbose))
+        except:
+            verbose = True
+    if verbose:
+        print 'Loading json data from "'+filepath+'"'
     # TODO: this should be try: f=open(): to avoid race condition
     #      alternatively readable should return the opened, readable file object
-    if readable(filename):
-        if verbose:  print 'File exists and is readable: "'+filename+'"'
-        f = open(filename,'r')
+    if readable(filepath):
+        if verbose:  print 'File exists and is readable: "'+filepath+'"'
+        f = open(filepath,'r')
         s = f.read()
-        if verbose:  print 'Read '+str(len(s))+' characters.'
+        if verbose:  
+            print 'Read '+str(len(s))+' characters.'
         data = json.loads( s )
-        if verbose and isinstance(verbose,str):
-            print verbose
+        if verbose and isinstance(verbose,(str,unicode)):
+            print verbose # verbose must be a message or heading to print it
         if verbose:
-            pprint(data)
+            print_data(data, n=display_recs, indent=2, pretty=False)
         return data
     else:
-        warn('File named '+repr(filename)+' was not readable.')
+        warn('File named '+repr(filepath)+' was not readable.')
         return None
     return None
 
@@ -1160,11 +1228,61 @@ def unoffset(data,columns=[0]):
     warn('Unable to unoffset data of type '+str(type(data))+'.')
     return None
 
-def size(lol):
-    if lol:
-        return len(lol), max([ (len(L) if isinstance(L,(list,dict,set)) else 0) for L in lol])
+def sizer(lol):
+    """Return the maximum length of each dimension in a nested list of lists
+    
+    >>> sizer([[range(5), [], 2, 3],[4, 5]]):
+    [2, [4, [5, 1]]]
+    >>> sizer([1]):
+    [1,[]]
+    """
+    if isinstance(lol,(list,set,tuple)):
+        sz=[len(lol)]
+        print 'top D with len ',len(lol)
+        sz2 = -1
+        for L in lol:
+            print 'inner D'
+            if isinstance(L,(list,set,tuple)):
+                print 'inner D has a list'
+                sz3 = sizer(L)
+                print 'returned size is',sz3
+                x = sz3[-1]
+                print 'last returned size is',x
+            elif isinstance(L,type(None)):
+                print 'inner D has a None'
+                x = -1
+            else:
+                print 'inner D has a non-List non-None'
+                x = 0
+            sz2 = max(sz2,x)
+            print 'inner max is',sz2
+        print 'max of all innner D is',sz2
+        print 'sz from earlier is',sz
+        if sz2>-1:
+            print 'creating a new list and appending',sz2
+            sz = sz.append(sz2)
+        print 'returnning inner D size of',sz
+        return sz
+    elif isinstance(lol,type(None)):
+        return([-1])
     else:
-        return None
+        return([+1])
+
+
+def size(lol):
+    sz = []
+    s = sizer(lol)
+#    while isinstance(s[0],list):
+#        if 
+#        sz.append(s[0]
+
+#        
+#    elif isinstance
+#    if lol and isinstance(lol,(list,set,tuple)):
+#        return max([ (size(L) if isinstance(L,(list,dict,set)) else 0) for L in lol])
+#    else:
+#        return len(lol)
+#        return (None,None)
 
 def mean(lol): 
     """
@@ -1268,6 +1386,37 @@ def row_normalize(rows):
             rows[i][j] = float(el-minr[i])/sf[i]
     return rows,minr,sf # return enough data to recover the original
 
+def display_correlation(rows, leads, labels):
+    """Print to terminal a matrix of 2-digit Pearson correlation coefficients
+    """
+    if not rows:
+        return
+
+    print leads
+    leads = leads or [0]
+    if isinstance(leads,(float,int)):
+        if int(leads)==0: # or statement above doesn't cover 0.0 < leads < 1.0
+            leads = [0]
+        if leads>0:
+            leads = range(min(int(leads)+1, 10))
+        elif leads<0:
+            leads = range(max(int(leads)-1,-10))
+    print '='*60
+    print 'Parameters for which correlation matrix was computed (in the order of matrix columns/rows):'
+    print '-'*60
+    pprint(labels,indent=2)
+    print '='*60
+    for lead in leads:
+        # This is the hard coded proof-of-concept forecasting algorithm
+        print '*'*60
+        print 'Pearson correlation coefficient(s) for a lead/lag of '+str(lead)
+        print '-'*60
+        C = lag_correlate(A=rows[1:],B=rows[1:],lead=lead)
+        #pprint(C,indent=2)
+        for c in C:
+            print '[' + ', '.join('%+0.2f' % c1 for c1 in c) + ']'
+        #TODO calculate for all paramters and find the maximum
+        print '*'*60
 
 def plot_data(columns=None, site=['mtgox'], value=['average'], title='Normalized ' +__name__+' Data', quiet=False, normalize=False):
     """Plot 2-D points in first to columns in a list of lists
@@ -1293,10 +1442,10 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title='Normalized
     data=None
     # TODO: load data inside one set of conditionals, then extrace columns in another set of conditionals
     if not columns:
-        data = load_json()
+        data = load_json(verbose=False)
         columns = byrow_key(data,name=site[0],yname=value[0],xname='datetime')
     if isinstance(columns, str):
-        data = load_json(path=columns)
+        data = load_json(filepath=columns,verbose=False)
         columns = byrow_key(data,name=site[0],yname=value[0],xname='datetime')
     if not (isinstance(columns,list) and isinstance(columns[0],list)):
         warn('Unable to plot data of type '+str(type(columns)))
@@ -1309,10 +1458,8 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title='Normalized
         while i<len(site):
             s,v = site[i],value[i]
             cols2 = byrow_key(data,name=s,yname=v,xname='datetime')
-            #print size(cols2)
             # interpolate the new data to line up in time with the original data
             columns.append(interpolate(cols2[0],cols2[1],t))
-            #print size(columns)
             i += 1
 
     x,y = columns2xy(columns)
@@ -1324,11 +1471,42 @@ def plot_data(columns=None, site=['mtgox'], value=['average'], title='Normalized
     plt.legend(legends)
     plt.grid('on')
     if not quiet:
-        print 'A plot window titled "'+title+'" is being displayed. You must close it before '+__name__+' can procede...'
+        print 'A plot titled "'+title+'" was displayed. Close it to procede.'
         plt.show()
     return columns
 
+# TODO: refactor as class method bitcrawl.Data.dump() or Django Model with at repr or str or dump() method
+def print_data(data, n=-3, indent=2, pretty=True):
+    """Print the data strcture in an indented outline form
+    
+    *n* = number of records to print (from the end if <0, from the beginning if >0)
+    """
+    n = int(n) 
+    if not n:
+        return
+    if pretty:
+        pprint(   data[min(0,n):min(len(data),abs(n))], indent=indent)
+    else:
+        print json.dumps(data[min(0,n):min(len(data),abs(n))], indent=indent)
+
+
+def test(verbose=True, internet=False):
+    import doctest 
+    optionflags=doctest.ELLIPSIS
+    doctest.testmod( verbose = verbose , optionflags=optionflags )
+    doctest.testfile( 'docs/bitcrawl.rst', verbose = verbose, optionflags=optionflags)
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod(verbose=True)
+    import sys
+    internet = False
+    verbose = True
+    # todo, don't check argv[0]
+    for a in sys.argv:
+        al = a.lower()
+        if al.startswith('-i') or al.startswith('--i'):
+            internet == True
+        if al.startswith('-q') or al.startswith('--q'):
+            verbose == False
+    # TODO: run subset of tests and print results according to command-line arguments
+    test(verbose=verbose, internet=internet)
+
