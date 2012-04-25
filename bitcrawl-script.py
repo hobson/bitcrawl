@@ -120,7 +120,7 @@ def parse_args():
         '-f','--path','--filename',
         type    = str,
         #nargs  = '*', # other options '*','+', 2
-        default = bc.FILENAME,
+        default = bc.FILEPATH,
         help    = 'File to append the numerical data to (after converting to a string).',
         )
     return p.parse_args()
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     data = None
     if not o.quiet or o.verbose:
-        data = bc.load_json(filename=o.path,verbose=-2)
+        data = bc.load_json(filepath=o.path,verbose=-2)
 
 
     sites, values, datetimes = bc.parse_query(o.graph)
