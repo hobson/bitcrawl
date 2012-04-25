@@ -404,7 +404,8 @@ def interp_multicol(lol,newx=None):
     >>> interp_multicol([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)],[0.4*x for x in range(15)])
     """
     #print lol
-    lol = make_wide(lol)
+    #lol = make_wide(lol)
+    lol = transpose_lists(lol)
     x=lol[0]
     #print lol[1:]
     for c,col in enumerate(lol[1:]):
@@ -637,7 +638,7 @@ def parse_index(s):
     
     >>> parse_index('[1][2]')
     [1, 2]
-    >>> parse_index('(3 2 1)')
+    >>> parse_index('[3][2][1]')  # FIXME, commas and parentheses don't work !
     [3, 2, 1]
     """
     #return (0)
@@ -716,7 +717,11 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
     """
     Retrieve data from bitcrawl_historical_data.json for sites and values specified
 
+    >>> retrieve_data('mtgox','last', ['2012-04-12 13:34','2012-04-15 13:35'])
+    [[734605.0, 734606.0, 734607.0, 734608.0],
+     [4.8833, 4.85660013796317, 4.890036645675644, 4.975431555147281]]
     Surprisingly this doesn't retrieve the volumes, just the prices for bf bids
+    And the dimensions seem weird
     >>> retrieve_data('bitfloor','bids', ['2012-04-12 13:34','2012-04-12 13:35'])
     [[734605.0], [[[4.88], [4.87], [4.86], ... [4.6], [4.59], [4.58]]]]
     """
@@ -997,8 +1002,13 @@ def transpose_lists(lists):
     >>> transpose_lists([[0, 1, 2, 3], [4, 5, 6, 7, 8], [9, 10, 11]])
     [[0, 4, 9], [1, 5, 10], [2, 6, 11], [3, 7], [8]]
     """
-    N,M = size(lists)
-    if not (N > 0 and M > 0):
+    NM = size(lists)
+    if not isinstance(NM,(tuple,list)):
+        warn("Can't transpose a scalar!"+str(lists))
+        return lists
+    N=NM[0]
+    M=NM[1]
+    if not (NM > 0 and M > 0):
         return lists
 
     # create empty lists
@@ -1228,25 +1238,29 @@ def unoffset(data,columns=[0]):
     warn('Unable to unoffset data of type '+str(type(data))+'.')
     return None
 
-def sizer(lol):
+def size_nonworking_recursive(lol):
     """Return the maximum length of each dimension in a nested list of lists
     
-    >>> sizer([[range(5), [], 2, 3],[4, 5]]):
+    > > size([[range(5), [], 2, 3],[4, 5]]):
     [2, [4, [5, 1]]]
-    >>> sizer([1]):
+    > > size([1]):
     [1,[]]
     """
     if isinstance(lol,(list,set,tuple)):
-        sz=[len(lol)]
+        szs = [size(L) for L in lol]
+        sz=max[len(lol)]
         print 'top D with len ',len(lol)
         sz2 = -1
         for L in lol:
             print 'inner D'
             if isinstance(L,(list,set,tuple)):
                 print 'inner D has a list'
-                sz3 = sizer(L)
+                sz3 = size(L)
+                if isinstance(sz3,list) and len(sz3)>0:
+                    x=sz3[-1]
+                else:
+                    x = sz3
                 print 'returned size is',sz3
-                x = sz3[-1]
                 print 'last returned size is',x
             elif isinstance(L,type(None)):
                 print 'inner D has a None'
@@ -1258,31 +1272,53 @@ def sizer(lol):
             print 'inner max is',sz2
         print 'max of all innner D is',sz2
         print 'sz from earlier is',sz
-        if sz2>-1:
-            print 'creating a new list and appending',sz2
-            sz = sz.append(sz2)
-        print 'returnning inner D size of',sz
-        return sz
+        if sz2>0:
+            print 'creating a new list and appending max size ',sz,'to',sz2
+            sz.append(sz2)
+            return sz
+        elif sz2<=0:
+            print 'returning the len of this innermost dimension',len(lol),'to',sz
+            return len(lol)
+        # TODO: decide what the dimension of a list of Nones is, zero?
     elif isinstance(lol,type(None)):
         return([-1])
     else:
         return([+1])
 
-
 def size(lol):
-    sz = []
-    s = sizer(lol)
-#    while isinstance(s[0],list):
-#        if 
-#        sz.append(s[0]
-
-#        
-#    elif isinstance
-#    if lol and isinstance(lol,(list,set,tuple)):
-#        return max([ (size(L) if isinstance(L,(list,dict,set)) else 0) for L in lol])
-#    else:
-#        return len(lol)
-#        return (None,None)
+    """Return the maximum length of each of 3 dimensions in a list of lists of lists
+    
+    >>> size([range(3),range(4)]):
+    (2, 4)
+    >>> size(range(3)):
+    (3)
+    >>> size(100):
+    0
+    >>> size([[range(4),range(5),range(6)],range(2),range(7)])
+    (3, 7, 6)
+    """
+    L0,L1,L2 = -1,-1,-1
+    if isinstance(lol,(list,set,tuple)):
+        L0=len(lol)
+        for D1 in lol:
+            if isinstance(D1,(list,set,tuple)):
+                L1 = max(len(D1),L1)
+                for D2 in D1:
+                    if isinstance(D2,(list,set,tuple)):
+                        L2 = max(len(D2),L2)
+                    else:
+                        L2 = max(0,L2)
+            else:
+                L1 = max(0,L1)
+        if L2>0:
+            return (L0,L1,L2)
+        elif L1>0:
+            return (L0,L1)
+        return (L0)
+    elif isinstance(lol,type(None)):
+        return None # NaN (0-Dimensional
+    else:
+        return 0 # scalar = 0-dimensional
 
 def mean(lol): 
     """
@@ -1295,9 +1331,9 @@ def mean(lol):
     """
     if isinstance(lol,list):
         if isinstance(lol[0],list):
-            rows = make_wide(lol) # if this could handle high-dimensional lists we'd be in business
+            #rows = make_wide(lol) # if this could handle high-dimensional lists we'd be in business
             # won't this recursively dive into a multidimensional list?
-            return [mean(row) for row in rows] 
+            return [mean(row) for row in lol] 
         else:
             return float(sum(lol))/len(lol)
 
@@ -1322,9 +1358,9 @@ def var(lol):
     """
     if isinstance(lol,list):
         if isinstance(lol[0],list):
-            rows = make_wide(lol) # if this could handle high-dimensional lists we'd be in business
+            #rows = make_wide(lol) # if this could handle high-dimensional lists we'd be in business
             # won't this recursively dive into a multidimensional list?
-            return [var(row) for row in rows] 
+            return [var(row) for row in lol] 
         else:
             if len(lol)>1:
                 mu = mean(lol)
