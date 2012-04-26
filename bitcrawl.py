@@ -1,4 +1,10 @@
 #!/usr/bin/python
+
+print dir
+print dir()
+print __dir__
+print __name__
+return
 """Module for crawling the web, extracting numbers, counting links and other stats
 
     Calculates statistics of the data gathered and plots 2-D plots.
@@ -584,15 +590,24 @@ def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
         return data
     return None
 
-def readable(path):
-    try:
-        f = open(path,'r')
-        # return f # but this makes readable() just like an f = open(... wrapped in a try
-        f.close()
-        return True
-    except:
-        return False
 
+# FIXME: ANTIIDIOM
+#def readable(path):
+#    try:
+#        f = open(path,'r')
+#        # return f # but this makes readable() just like an f = open(... wrapped in a try
+#        f.close()
+#        return True
+#    except:
+#        return False
+
+def file_is_readable(file):
+    with open(file) as fp:
+        return fp.readline()
+    # unfortunately the file will close when this returns so you can't just keep reading it
+    # better to do this within the code where this was called to continue using fp while it's open
+
+# VERY ANTI-IDIOMATIC
 def updateable(path,initial_content='',min_size=0):
     if initial_content:
         min_size = max(min_size,len(initial_content))
@@ -605,7 +620,7 @@ def updateable(path,initial_content='',min_size=0):
         f.close()
         return True
     else:
-        if readable(path): # don't open for writing because that will create and truncate it
+        if file_is_readable(path): # don't open for writing because that will create and truncate it
             try:
                 f = open(path,'r+')
             except:
@@ -713,7 +728,7 @@ def parse_query(q):
 #        ' \n values = '+ str(values) )
 
 # TODO: incoporate interpolation 
-def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None):
+def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None, verbose=True):
     """
     Retrieve data from bitcrawl_historical_data.json for sites and values specified
 
@@ -725,10 +740,6 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
     >>> retrieve_data('bitfloor','bids', ['2012-04-12 13:34','2012-04-12 13:35'])
     [[734605.0], [[[4.88], [4.87], [4.86], ... [4.6], [4.59], [4.58]]]]
     """
-    #print '+'*10
-    #print sites
-    #print '+'*10
-    #print values
     if isinstance(sites,list) and isinstance(values,list):
         return     [ retrieve_data(s,v)      for s,v in zip(sites,values) ]
     if isinstance(sites,list) or isinstance(values,list):
@@ -750,8 +761,11 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
         warn('Unable to find matching data of type '+repr(type(columns))+
              ' using site key '+repr(sites)+' and value key '+repr(values))
         return None
-
-    if not rows:
+    if verbose:
+        NM = size(rows)
+        print "Retrieved an array of historical data records size",NM
+    N,M = size2(rows, errors=True)
+    if not rows or N<1 or M<1:
         return rows
 
     t = []
@@ -761,8 +775,6 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None)
                                      int(max(rows[0]))+1)]
     else:
         t = datetime2float(datetimes) # this will be a float or list of floats
-    print size(t)
-    print size(rows)
     rows[1] = interpolate(x=rows[0], y=rows[1], newx=t)
     rows[0] = t
 
@@ -1067,9 +1079,9 @@ def load_json(filepath=FILEPATH, verbose=-3):
         print 'Loading json data from "'+filepath+'"'
     # TODO: this should be try: f=open(): to avoid race condition
     #      alternatively readable should return the opened, readable file object
-    if readable(filepath):
-        if verbose:  print 'File exists and is readable: "'+filepath+'"'
-        f = open(filepath,'r')
+    with open(filepath) as f:
+        if verbose:  
+            print 'File exists and is readable: "'+filepath+'"'
         s = f.read()
         if verbose:  
             print 'Read '+str(len(s))+' characters.'
@@ -1079,10 +1091,7 @@ def load_json(filepath=FILEPATH, verbose=-3):
         if verbose:
             print_data(data, n=display_recs, indent=2, pretty=False)
         return data
-    else:
-        warn('File named '+repr(filepath)+' was not readable.')
-        return None
-    return None
+    raise IOError('File named '+repr(filepath)+' was not readable.')
 
 # TODO: set default url if not url
 def bitfloor_book(bids=None,asks=None,verbose=False):
@@ -1187,7 +1196,7 @@ def make_tall(lol):
     >>> make_tall([range(6),[float(x)**1.5 for x in range(6)],range(3,-3,-1)])
     [[0, 0.0, 3], [1, 1.0, 2], [2, 2.8284271247461903, 1], [3, 5.196152422706632, 0], [4, 8.0, -1], [5, 11.180339887498949, -2]]
     """
-    N,M = size(lol)
+    N,M = size2(lol)
     #print N,M
     # if it's already a single-dimension array/list/vector then its already "wide"
     # don't convert it to a 2-D matrix
@@ -1208,7 +1217,7 @@ def make_wide(lol):
     [[0, 1, 2, 3, 4, 5], [0.0, 1.0, 2.8284271247461903, 5.196152422706632, 8.0, 11.180339887498949], [3, 2, 1, 0, -1, -2]]
     """
     # TODO size() needs to handle high-dimensionality
-    N,M = size(lol)
+    N,M = size2(lol)
     # if it's already a single-dimension array/list/vector then its already "wide"
     # don't convert it to a 2-D matrix
     if M<=0: 
@@ -1227,7 +1236,7 @@ def unoffset(data,columns=[0]):
     """
     if isinstance(data, list):
         if isinstance(data[0],list):
-            N,M = size(data)
+            N,M = size2(data)
             if N>M:
                 d = make_tall([[r[0]-data[0][0] for r in data],make_wide(data)[1:]])
             else:
@@ -1320,6 +1329,75 @@ def size(lol):
     else:
         return 0 # scalar = 0-dimensional
 
+def size2(x, errors=True, verbose=True):
+    """Return a tuple of 2 dimensions regardless of the size of the lists in x.
+    
+    >>> size2([[1,2,3],[4,5]])
+    (2, 3)
+    >>> size2([[[[0,1],[2,3]],[4,5]],[6,7,8,9]], verbose=False, errors=True)
+    (2, 4)
+    >>> size2([[[[0,1],[2,3]],[4,5]],[6,7,8,9]], verbose=True, errors=True)
+    bitcrawl.py:...: UserWarning: Nested iterable contained more than 2 dimensions but only 2 requested. Size: (2, 4, 2)
+      warn("Nested iterable contained more than 2 dimensions but only 2 requested. Size: "+str(NM))
+    (2, 4)
+    >>> size2([1,2,3], verbose=False, errors=False)
+    (3, 0)
+    >>> size2([1,2,3], verbose=False, errors=True)
+    Traceback (most recent call last):
+        ...
+    ValueError: Nested iterable contained less than 2 dimensions. Size: 3
+    """
+    NM = size(x)
+    print 'size(NM)',NM
+    D = 1
+    try:
+        D = len(NM)
+        print 'D',D
+    except TypeError:
+        pass
+    if D==2:
+        return NM[0], NM[1]
+    if D>2:
+        if verbose:
+            warn("Nested iterable contained more than 2 dimensions but only 2 requested. Size: "+str(NM))
+        return NM[0], NM[1]
+    if D<2:
+        if errors:
+            raise ValueError("Nested iterable contained less than 2 dimensions. Size: "+str(NM))
+        elif verbose:
+            warn("Nested iterable contained less than 2 dimensions and 2 requested. Size: "+str(NM))
+    if D==1:
+        return NM, 0
+    return 0, 0
+
+def size3(x, errors=True, verbose=True):
+    """Return a tuple of 3 dimensions regardless of the size of the lists in x.
+    """
+    NM = size(x)
+    D = 1
+    try:
+        D = len(NM)
+    except TypeError:
+        pass
+    if D==3:
+        return NM[0], NM[1], NM[2]
+    elif D>3:
+        if verbose:
+            warn("Nested iterable contained more than 3 dimensions but only 3 requested. Size: "+str(NM))
+        return NM[0], NM[1], NM[2]
+    elif D<3:
+        if errors:
+            raise ValueError("Nested iterable contained less than 3 dimensions. Size: "+str(NM))
+        elif verbose:
+            warn("Nested iterable contained less than 3 dimensions and 3 requested. Size: "+str(NM))
+    if D==2:
+        return NM[0], NM[1], 0
+    elif D==1:
+        return NM, 0, 0
+    return 0, 0, 0
+
+        
+    
 def mean(lol): 
     """
     Compute mean (expected value, or average) of columns (or rows, if rows longer).
@@ -1389,8 +1467,16 @@ def columns2xy(columns):
     >>> columns2xy([range(3),[x**1.3 for x in range(3)],[3.*x for x in range(3)]])
     ([[0, 0], [1, 1], [2, 2]], [[0.0, 0.0], [1.0, 3.0], [2.4622888266898326, 6.0]])
     """
+    #print 'size',size(columns)
     rows = make_wide(columns)
-    return make_tall([rows[0]]*(len(rows)-1)), make_tall(rows[1:])
+    #print 'size',size(rows)
+    #print 'size2',size2(rows)
+    N,M = size2(rows, errors=True, verbose=True)
+    if N>1:
+        return make_tall([rows[0]]*(N-1)), make_tall(rows[1:])
+    elif N==1:
+        return make_tall(range(M)), make_tall(rows)
+    return None, None
 
 def col_normalize(columns):
     """Normalize each column so that it spans the range 0..1
@@ -1529,8 +1615,13 @@ def print_data(data, n=-3, indent=2, pretty=True):
 def test(verbose=True, internet=False):
     import doctest 
     optionflags=doctest.ELLIPSIS
-    doctest.testmod( verbose = verbose , optionflags=optionflags )
-    doctest.testfile( 'docs/bitcrawl.rst', verbose = verbose, optionflags=optionflags)
+    if internet:
+        doctest.testmod( verbose = verbose , optionflags=optionflags )
+        doctest.testfile( 'docs/bitcrawl.rst', verbose = verbose, optionflags=optionflags)
+    else:
+        testfuns = [dir()]
+        for tf in testfuns:
+            run_docstring_examples(tf,globs=None)
 
 if __name__ == "__main__":
     import sys
@@ -1543,6 +1634,6 @@ if __name__ == "__main__":
             internet == True
         if al.startswith('-q') or al.startswith('--q'):
             verbose == False
-    # TODO: run subset of tests and print results according to command-line arguments
+    # TODO: don't rull all tests!
     test(verbose=verbose, internet=internet)
 
