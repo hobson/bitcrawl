@@ -16,6 +16,7 @@ import sys
 from warnings import warn
 
 # TODO: don't read the whole file into memory and write.
+# TODO: DRY-up using replace_in_file
 #   Do some clever buffering of a MB or so of text at a time.
 #   When scan pattern overlaps multiple buffer pages and pattern extent is unknown
 #     would have to repeat the search on a large sliding window one line at a time
@@ -41,28 +42,77 @@ def multiline_replace_in_file(search_pattern, replacement_pattern, fname):
     with open(fname,'w') as f:
         f.write(s)
 
+TEXTCHARS = ''.join(map(chr, [7,8,9,10,12,13,27] + range(0x20, 0x100)))
+is_binary_string = lambda bytes: bool(bytes.translate(None, TEXTCHARS))
 
-def replace_in_file(search_pattern, replacement_pattern, fname):
+def replace_in_file(search_pattern, replacement_pattern, fname,
+                    verbose=True, interactive=True, tmp_file_suffix=".tg.utils.replace_in_file.tmp", dry_run=False,binary=False):
     """Replace all occurrences of a search pattern in a single file
 
-    BASED ON:
-      http://stackoverflow.com/questions/1597649/replace-strings-in-files-by-python
+    Loosely modeled after ideas from 
+    <http://stackoverflow.com/questions/1597649/replace-strings-in-files-by-python>
 
     >>> replace_in_file('my_password', 'REDACTED_PASSWORD', '~/.bash_history')
     """
 
+    if isinstance(search_pattern, str):
+        search_pattern = re.compile(search_pattern)
+    if not isinstance(search_pattern, re._pattern_type):
+        raise ValueError('Invalid search string regex or re pattern object')
     # first, see if the pattern is even in the file.
-    with open(fname) as f:
-        if not any(re.search(search_pattern, line) for line in f):
-            return # pattern does not occur in file so we are done.
-
-    # pattern is in the file, so perform replace operation.
-    with open(fname) as f:
-        out_fname = fname + ".tmp"
-        out = open(out_fname, "w")
-        for line in f:
-            out.write(re.sub(search_pattern, replacement_pattern, line))
-        out.close()
+    found = 0
+    l = 0
+    with open(fname) as fin:
+        for line in fin:
+            l += 1
+            if not binary and is_binary_string(line):
+                # TODO: raise an exception if appropriate
+                return
+            if search_pattern.search(line):
+                if verbose:
+                    print "First found the requested text, "+repr(search_pattern.pattern)+", on line %d " % l
+                found = 1
+                break
+        if not found:
+            if verbose:
+                print "Search pattern "+repr(search_pattern.pattern)+" not found in file path "+repr(fname)+'.'
+            return
+    found = 0
+    with open(fname) as fin: # like fin.seek(0)
+        out_fname = fname + tmp_file_suffix
+        # FIXME: use tempfile module or some other means of generating a unique tmp file
+        # FIXME: don't overwrite existing file if exists, raise exception
+        with open(out_fname, "w") as fout:
+            for line in fin:
+                if not isinstance(line,(str,unicode)) or is_binary_string(line): # FIXME, currently can't read and write binary strings
+                    continue # abort for unicode and binary, for now
+                (s,n) = search_pattern.subn(replacement_pattern, line)
+                if (verbose or interactive) and n:
+                    print 'Found {0} occurences on line {1}'.format(n,l)
+                    print '  WAS: '+line
+                    print '   IS: '+s
+                if interactive:
+                    if wait_for_key('Hit [Y] or [y] to replace, [ctrl-C] to cancel, anything else to skip.') in 'Yy':
+                        if not dry_run:
+                            found += n
+                            fout.write(s)
+                        else:
+                            print 'DRY_RUN set, so no change made'
+                            fout.write(line)
+                    else:
+                        if not dry_run:
+                            fout.write(line)
+                        else:
+                            print 'DRY_RUN set, so no change made'
+                            fout.write(line)
+                else:
+                   if not dry_run:
+                       found += n
+                       fout.write(s)
+                   else:
+                       print 'DRY_RUN set, so no change to file.'
+                       fout.write(line)
+    if found:
         os.rename(out_fname, fname)
 
 # http://stackoverflow.com/questions/434597/open-document-with-default-application-in-python
@@ -71,7 +121,7 @@ def start(filepath):
     import os,subprocess
     if os.name == 'nt':
         startfile(filepath)
-    elif name in ['mac','posix']:
+    elif name in ['posix']: # 'mac' doesn't work here because too old a variant of mac OS
         try:
             #retcode = subprocess.call(('xdg-open if os.name==)+"open" + filename, shell=True)
             retcode = subprocess.call(('xdg-open', filepath))
@@ -180,8 +230,96 @@ def launch(path, operation='open', gui=True, fallback=True):
             else:
                 raise
 
+# based on http://code.activestate.com/recipes/499305-locating-files-throughout-a-directory-tree/
+def locate(pattern, basepath='', regex=False, matchpath=False):
+    """Locate all files matching pattern below supplied base path.
+    
+    >>> locate('/tg/utils.py',basepath='/',matchpath=True)
+    <generator object ...>
+    
+    matchpath: Include path string matches in addition to filename matches
+    regex: Pattern is interpreted as a regular expression instead of a Unix-style file glob
+    
+    TODO:
+        use posix 'slocate --existing' command if availble for faster results
+        update locate or slocate database if it's stale
+    """
+    import os, fnmatch, re
+    basepath = basepath if isinstance(basepath,str) else ''
+    basepath = basepath or ''
+    # no need to assign to os.curdir or Env.CWD because os.path.abspath('') does so by default
+    basepath = basepath if (not basepath=='.' and not basepath=='.'+os.path.sep) else '' #os.curdir
+    if basepath == os.path.sep or basepath=='/':
+        basepath = os.path.sep
+    basepath = os.path.abspath(os.path.normpath(basepath))
+    # print 'basepath = '+repr( basepath )
+    matcher = fnmatch.fnmatch
+    matcher_arg = pattern 
+    if not matcher_arg:
+        raise ValueError("Can't match a file unless you provide a pattern for locate() to look for!")
+    if regex:
+        rx = re.compile(pattern) # if weren't using a compiled regex then code less complicated but less efficient
+        matcher = rx.search
+        matcher_arg = 0 # for re.search() this is the position in the string to start the search
+    for path, dirs, files in os.walk(os.path.abspath(basepath)):
+        files = files if not matchpath else [os.path.join(path,fn) for fn in files]
+        print repr(files)
+        fullpaths=[]
+        for fp in files:
+            if matcher(fp, matcher_arg):
+                fullpaths += [fp]
+        for fullpath in fullpaths:
+            print fullpath
+            if fullpath:
+                fullpath = fullpath if matchpath else os.path.join(path,fullpath)
+                print fullpath
+                yield fullpath
 
+#def locate(path_pattern,base_path=''):
+#    """Cross platform file find command similar to posix 'locate' command"""
+#    if not path_pattern or not isinstance(path_pattern, str):
+#        raise ValueError('Unable to recognize the path pattern string in '+repr(path_pattern))
+#    is os.name=='posix':
+#        if os.base_path=='':
+#            subprocess.check_call(['locate', path_pattern], 
+#                                      stdin=subprocess.DEVNULL,
+#                                      stdout=subprocess.DEVNULL, 
+#                                      stderr=subprocess.DEVNULL)
+                                  
+                            
 
+# from http://docs.python.org/faq/library#how-do-i-get-a-single-keypress-at-a-time
+def wait_for_key(message='Hit Y <CTRL-C> to cancel, any other key to continue...',verbose=False):
+    import termios, fcntl, sys, os
+    print message
+    if os.name == 'posix': 
+        fd = sys.stdin.fileno()
+
+        oldterm = termios.tcgetattr(fd)
+        newattr = termios.tcgetattr(fd)
+        newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
+        termios.tcsetattr(fd, termios.TCSANOW, newattr)
+
+        oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, oldflags | os.O_NONBLOCK)
+        try:
+            while 1:
+                try:
+                    c = sys.stdin.read(1)
+                    if verbose:
+                        print "Received character "+repr(c)+" from stdin."
+                    return c # TODO: this doesn't bypass the finally section does it?
+                except IOError: pass
+        finally:
+            termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
+            fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
+    elif sys.platform.startswith('darwin'):
+        # TODO: implement
+        raise NotImplementedError("No keyboard input function is implemented for older Mac OS versions.")
+    else:
+        # TODO: implement
+        raise NotImplementedError("No keyboard input function is implemented for your OS.")
+    
 # TODO: reuse this script in "/home/hobs/bin/securehist" to search widely for passwords to delete
 # TODO: use the os.path functions to parse the filename and compare the extension 
 #      (so that an empty extension can be matched, as in the examples)
@@ -193,7 +331,14 @@ def launch(path, operation='open', gui=True, fallback=True):
 #	replace_in_files(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
 #else:
 #	replace_in_files(sys.argv[1], sys.argv[2], sys.argv[3])
-def replace_in_files(search_pattern, relacement_pattern, dir_name='./', extensions=None):
+def replace_in_files(search_pattern             , 
+                     replacement_pattern        ,
+                     dir_name             = './', # FIXME: crossplatform CWD using Env.CWD sys.cwd()?
+                     extensions           = '',
+                     filename_pattern     = None, 
+                     verbose              = True,
+                     dry_run              = True,
+                     interactive          = False):
     """Replace all occurrences of a search pattern in all files in a directory tree
 
     BASED ON:
@@ -202,15 +347,39 @@ def replace_in_files(search_pattern, relacement_pattern, dir_name='./', extensio
     >>> replace_in_files('your_sensitive_string_to_be_removed', '***REDACTED_TEXT***', '~/bin',['','.txt','.sh'])
     """
     repat = re.compile(search_pattern)
+    if filename_pattern:
+        fpat  = re.compile(filename_pattern)
+    else:
+        fpat = None
+    done = False
     for dirpath, dirnames, filenames in os.walk(dir_name):
+        if done:
+            break #TODO: surely there's a better way to break out of a nested loop twice
         for fname in filenames:
-            if extensions and not fname.lower().endswith(replace_extensions):
+            # TODO: allow multiple extensions in a list/set/tuple
+            if extensions and not fname.lower().endswith(extensions.lower()): 
+                continue
+            # TODO: detect whether pattern contains path separators (slashes) and match to fullname if so
+            if fpat and not fpat.match(fname):
                 continue
             fullname = os.path.join(dirpath, fname)
-            replace_in_file(fullname, repat, replacement_pattern)
+            if verbose or interactive:
+                print 'Looking for pattern '+repr(repat.pattern)+' in '+repr(fullname)+'.'
+            key = 'Y'
+            if interactive:
+                key = wait_for_key('Hit Y to procede, <CTRL-C> to cancel, any other key to skip this file.')
+            if key in ['x','X','C','c']:
+                done = True
+                break
+            if key in ['Y','y']:
+                replace_in_file(search_pattern, replacement_pattern, fname=fullname,
+                    verbose=verbose, interactive=interactive, 
+                    tmp_file_suffix=".tg.utils.replace_in_file.tmp",
+                    dry_run=dry_run)
 
 def containing_folder(filepath=os.getcwd()):
     return os.path.split(os.path.dirname(filepath).strip(os.sep))[-1]
+
 
     
 class Env:
@@ -277,12 +446,10 @@ def find_nearby_file(filename=None, defaultname=DEFAULT_TMP_FILENAME, alternate_
     if not os.path.isfile(filepath):
         filepath= os.path.join(env.home,defaultname)
     if os.path.isfile(filepath):
-        with open(filepath,'+w') as fp:
-        with 
-        with open(filepath,'w') as fp:
+        with open(filepath,'a+') as fp: # open for reading and writing with pointer at end
             s = fp.write('')
             return filepath
-        print 'Unable to create a file at ',repr(filepath)
+        print 'Unable to create or append the file at ',repr(filepath)
 
 def android_path():
     # any android devices mounted in "usb storage" mode and return a list of paths to their sdcard root
@@ -376,6 +543,185 @@ def flatten(list_o_lists):
 flatten_lists = lambda *n: (e for a in n
     for e in (flatten(*a) if isinstance(a, (tuple, list)) else (a,)))
 
+## Django project settings loader
+#import os
+#ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
+
+## You can key the configurations off of anything - I use project path.
+#configs = {
+#    '/path/to/user1/dev/project': 'user1',
+#    '/path/to/user2/dev/project': 'user2',
+#    '/path/to/qa/project': 'qa',
+#    '/path/to/prod/project': 'prod',
+#}
+
+## Import the configuration settings file - REPLACE projectname with your project
+#config_module = __import__('config.%s' % configs[ROOT_PATH], globals(), locals(), 'projectname')
+
+## Load the config settings properties into the local scope.
+#for setting in dir(config_module):
+#    if setting == setting.upper():
+#        locals()[setting] = getattr(config_module, setting)
+
+def merge_settings( new, old=None, allcaps=True, doubleunderscore=False, verbose=2, overwrite=True, depth=100):
+    """
+    Merge two namespaces (modules), optionally ignoring non-ALL-CAPS names
+    
+    If old is None then this function attempts to use a settings (settings.py)
+    module from the python path.
+    
+    Duplicate keys (variable/atribute names) are recursively merged to 
+    deal with nested dictionaries (dict of dict of dict ...)
+    
+    Lists and tuples are appended/extended.
+    Dicts and sets are updated/unioned
+    """
+    # TODO: check for empty new dicts and either delete or don't update the old dict
+    import copy
+    if not old:
+        warn('no old module supplied, so loading the nearest settings.py')
+        import settings as old
+    import types
+    scalar_type = (str, float, int, bool) # TODO: what about types.ClassType or types.ObjectType or types.StringTypes
+    # TODO: check for empty new dicts and either delete or don't update the old dict
+    if verbose>=2:
+        print('old='+repr(type(old)))
+        print('new='+repr(type(new)))
+    #print new.__dict__
+    if isinstance( old, types.ModuleType):
+        dold = old.__dict__
+    elif isinstance( old, dict):
+        dold = old # can't deepcopy dicts with __new__ method
+    else: #unnecessary? 
+        dold = copy.deepcopy(dict(old)) # deepcopy should be unnecessary
+    if isinstance( new, types.ModuleType):
+        dnew = new.__dict__
+    elif isinstance( new, dict):
+        dnew = new # can't deepcopy dicts with __new__ method
+    else: #unnecessary?
+        dnew = copy.deepcopy(dict(new)) # deepcopy should be unnecessary
+    if isinstance(old, dict) and isinstance(new,dict) and isinstance( dold, dict ) and isinstance( dnew, dict ):
+        if verbose>=2:
+            print 'merging 2 modules'
+        # merge non-allcaps stuff within dicts, because this is likely the second (recursive) call to merge_settings
+        merge_iter( dnew, dold, allcaps=False, doubleunderscore=True, verbose=verbose, 
+                    overwrite=overwrite, depth=depth)
+    elif isinstance( dold, dict ) and isinstance( dnew, dict ):
+        if verbose>=2:
+            print 'merging 2 modules'
+        # when non-dicts are passed to merge_settings, this is a clue that this is the first (nonrecursive) call, so ingnore allcaps (if requested) at the top level
+        merge_settings( dnew, dold, allcaps=allcaps, doubleunderscore=True, verbose=verbose, 
+                    overwrite=overwrite, depth=depth)
+    # FIXME: watch out! you're replacing hidden module elements like __name__ __file__ etc!!!!
+    if isinstance( old, types.ModuleType):
+        if verbose>=2:
+            print 'setting the old module to contain the values from the new merged dict'
+        for k,v in dold.items():
+            if not ( k.startswith('__') and k.endswith('__') ):
+                merge_iter( dnew, dold, allcaps, doubleunderscore, verbose=verbose, 
+                            overwrite=overwrite, depth=depth)
+        old.__dict__ = dold # is this enough to reset all the values?
+    else:
+        if verbose>=2:
+            print 'setting the old dict to a new merged dict'
+        old = dold # no deep copy because a copy was already made
+    return old
+
+# designed for django settings.py files, but should work with any namespace merging of only all-caps variables
+def merge_iter( new, old, allcaps=True, doubleunderscore=False, verbose=2, overwrite=True, depth=100):
+    """
+    Merge two namespaces or dictionaries, optionally ignoring non-ALL-CAPS names
+    
+    Duplicate keys (variable/atribute names) are recursively merged to 
+    deal with nested dictionaries (dict of dict of dict ...)
+    
+    Lists are appended/extended.
+
+    TODO:
+        mimic the Yii associative array merge function, including specification of prefixes and suffixes to skip
+    """
+    import types,copy
+    scalar_type   = (str, float, int, bool, types.MethodType) # TODO: what about types.ClassType or types.ObjectType or types.StringTypes
+    iterable_type = (list,tuple,set)
+    if isinstance( old, types.ModuleType ) or isinstance( new, types.ModuleType ):
+        print 'aborting merge of 2 modules'
+        return old
+    elif isinstance( old, dict ) and isinstance( new, dict ):
+        if verbose>=2:
+            print 'merging two dicts'
+        for k,v in new.items():
+            if verbose>=2:
+                print 'merging key ',k
+            # problem with this is that when inside a dict we WANT to merge non-allcaps stuff
+            if (not allcaps or k==k.upper()) and ( doubleunderscore or not ( k.startswith('__') and k.endswith('__') )):
+                if k in old:
+                    if depth>0:
+                        old[k] = merge_iter( new[k], old[k], allcaps, doubleunderscore,
+                                             verbose=verbose, overwrite=overwrite, depth=depth)
+                    elif overwrite:
+                        old[k] = copy.deepcopy(new[k])
+                else:
+                    # FIXME: deepcopy faults on objects with unsafe attributes like __new__!
+                    old[k] = copy.deepcopy(new[k]) # deepcopy in case the element is an object/dict, 
+            elif verbose>=2:
+                print 'key value ignored because it looks like a protected or non-user object'
+                # don't do anythin with double underscore or mixed-case variables if not flagged to merge them
+    # merge lists by unioning -- don't add duplicates
+    elif isinstance( old, list ) and isinstance( new, iterable_type ): # and not isinstance( new, (str,unicode)):
+        if isinstance(new,tuple):
+            print 'merging a tuple into a list. list ='+repr(old)
+            
+        #TODO: convert to sets, append, then convert back to list?
+        for i,v in enumerate(new):
+            if verbose>=2:
+                print 'merging list item',i
+            # FIXME: the exact same object instance (e.g. dict) might not exist in the old
+            #        but you still want to merge dicts rather than append a new dict
+            if not v in old:
+                if verbose>=2:
+                    print 'appending list item',i
+                old.append(v)
+        if isinstance(new,tuple):
+            print 'merged tuple into a list. list ='+repr(old)
+    elif isinstance( old, tuple ) and isinstance( new, iterable_type ): # and not isinstance( new, (str,unicode)):
+        #TODO: convert to sets, append, then convert back to list?
+        print 'old tuple'+repr(old)
+        for i,v in enumerate(new):
+            if verbose>=2:
+                print 'merging tuple item',i #,' value '+repr(v)
+            # FIXME: the exact same object instance (e.g. dict) might not exist in the old
+            #        but you still want to merge dicts rather than append a new dict
+            #print type(new)
+            if not v in old:
+                if verbose>=2:
+                    print 'appending the value'
+                tmp = old + (v,) # WARN: tuple(v) would turn a str into a tuple of chars
+                old = tmp
+        print 'new tuple'+repr(old)
+    # TODO: 4 DRY-up oportunities below
+    elif isinstance( old, tuple) and isinstance( new, scalar_type ): # even though strings are a tuple of characters this shouldn't mess up
+        if verbose>=2:
+            print 'appending a scalar '+repr(v)+' to a tuple'
+        #TODO: convert to sets, append, then convert back to list?
+        tmp = old + (new,) # WARN: don't use tuple(new) because converts str to a tuple of chars, but parentheses (with comma) do not
+        old = tmp
+    elif isinstance( old, list ) and isinstance( new, scalar_type ):
+        if verbose>=2:
+            print 'appending a scalar to a list'
+        #TODO: convert to sets, append, then convert back to list?
+        old.append(new)
+    elif isinstance( old, set ) and isinstance( new, scalar_type ):
+        if verbose>=2:
+            print 'adding a scalar to a set'
+        #TODO: convert to sets, append, then convert back to list?
+        old.add(new)
+    elif isinstance( old, scalar_type ) and isinstance( new, scalar_type ):
+        if verbose>=2:
+            print 'replacing value '+repr(old)+' with value ' +repr(new)
+        old = new # TODO: is it OK to change the old type in addition to its value?
+    # FIXME: mismatched schemas (new and old elements not the same type and structure) may result in no change
+    #print 'returning value '+repr(old)
+    return old
  
 
 ## TODO: there should be a clever way to do this with a recursive function and a static variable to hold the accumulated list of dimensions

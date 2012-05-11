@@ -1,10 +1,5 @@
 #!/usr/bin/python
 
-print dir
-print dir()
-print __dir__
-print __name__
-return
 """Module for crawling the web, extracting numbers, counting links and other stats
 
     Calculates statistics of the data gathered and plots 2-D plots.
@@ -418,7 +413,7 @@ def interp_multicol(lol,newx=None):
         #print c,col,x,newx
         lol[c+1] = interpolate(x,col,newx)
 
-def interpolate(x,y,newx=None,method='linear'):
+def interpolate(x,y,newx=None,method='linear',verbose=True):
     """
     Interpolate y for newx.
 
@@ -432,11 +427,18 @@ def interpolate(x,y,newx=None,method='linear'):
     # TODO: walk the dimensions of the lists, doing a size() to find which 
     #       dimensions correspond  (x <--> y) so that the interpolation vector
     #       lengths match
-    if isinstance(x[0],(float,int,str)) and isinstance(y[0],(list,tuple)):
-        return [ interpolate(x,y1,newx,method) for y1 in y ]
+    if isinstance(x[0],(float,int,str)) and isinstance(y[0],(list,tuple)) and len(x)==len(y):
+#        if verbose:
+#            warn('You provided a list of y values and a scalar x to interpolate to
+        #raise ValueError('interpolate() is only designed to handle a pair of lists or a list and a list of lists. size(x)='+repr(size(x))+'  size(y)='+repr(size(y))+'size(newx)='+repr(size(newx)))
+        y2 = transpose_lists(y)
+        if verbose:
+            print 'interpolate() is trying for size(x)='+repr(size(x))+'  size(y)='+repr(size(y2))+'size(newx)='+repr(size(newx))
+
+        return [ interpolate(x,y1,newx,method,verbose=verbose) for y1 in y2 ]
     elif isinstance(x[0],(list,tuple)) and isinstance(y[0],(list,tuple)):
         # TODO: check the length of x[0] and y[0] to see which dimension in y corresponds to x
-        return [ interpolate(x1,y1,newx,method) for x1,y1 in zip(x,y) ]
+        return [ interpolate(x1,y1,newx,method,verbose=verbose) for x1,y1 in zip(x,y) ]
     # TODO: now that we're at the innermost dimension of the 2 lists, we need
     #       to check that the length of the x and y and/or newx lists match
     # TODO: sort x,y (together as pairs of tuples) before interpolating, then unsort when done
@@ -447,6 +449,9 @@ def interpolate(x,y,newx=None,method='linear'):
         #print make_wide(newx)
     newy=[]
     N=len(newx)
+    if not len(x)==len(y):
+        raise ValueError("Can't interpolate() for size(x)="+repr(size(x))+'  size(y)='+repr(size(y))+'size(newx)='+repr(size(newx)))
+
     if method.lower().startswith('lin'):
         i, j, x0, y0 = 0, 0, newx[0], y[0]
         while i < len(x) and j<N:
@@ -720,7 +725,7 @@ def parse_query(q):
 #    print '-'*10
 #    print datetimes
 #    print '-'*10
-    return sites, values, datetimes
+    return [sites[0], values[0], datetimes]
     #return (s[0] for s in sitevalues, datetimes
 #    warn('Unable to identify the sites and values that query string attempted to retrieve. '+
 #        ' \n query  = '+ str(q)+
@@ -741,15 +746,19 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None,
     [[734605.0], [[[4.88], [4.87], [4.86], ... [4.6], [4.59], [4.58]]]]
     """
     if isinstance(sites,list) and isinstance(values,list):
+        if verbose:
+            print 'sites and values are lists'
         return     [ retrieve_data(s,v)      for s,v in zip(sites,values) ]
-    if isinstance(sites,list) or isinstance(values,list):
-        if isinstance(sites,list) and isinstance(values,str):
-            return [ retrieve_data(s,values) for s   in sites             ]
-        if isinstance(sites,str)  and isinstance(values,list):
-            return [ retrieve_data(sites, v) for v   in values            ]
+    if isinstance(sites,list) and isinstance(values, str):
+        return [ retrieve_data(s,values) for s   in sites             ]
+    if isinstance(sites, str) and isinstance(values,list):
+        return [ retrieve_data(sites, v) for v   in values            ]
     rows = []
     if isinstance(values,str) and isinstance(sites,str):
-        data = load_json(filepath,verbose=False) # None filepath loads data from default path
+        if verbose:
+            print 'retrieving a single data series, ('+sites+','+values+').'
+        # very inefficient to reload data with every time series retrieved
+        data = load_json(filepath, verbose=False) # None filepath loads data from default path
         if not data:
             warn('Historical data could not be loaded from '+repr(filepath))
             return []
@@ -757,15 +766,16 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None,
     else:
         warn('Invalid site key '+repr(sites)+', or value key '+repr(values))
         return None
-    if not (isinstance(rows,list) or not isinstance(rows[0],list)):
+    if not (isinstance(rows,list) or not isinstance(rows[0],list)): # should always be an Nx2 matrix with each element either a value or a list of M values
         warn('Unable to find matching data of type '+repr(type(columns))+
              ' using site key '+repr(sites)+' and value key '+repr(values))
         return None
+    NM = size(rows)
     if verbose:
-        NM = size(rows)
         print "Retrieved an array of historical data records size",NM
-    N,M = size2(rows, errors=True)
-    if not rows or N<1 or M<1:
+    if (not rows or not isinstance(NM,(list,tuple)) or len(NM)<2 or
+                   any([nm<1 for nm in NM]) ):
+        print "Retrieved 1 or fewer data points, which is unusual."
         return rows
 
     t = []
@@ -775,23 +785,24 @@ def retrieve_data(sites='mtgox',values='average', datetimes=None, filepath=None,
                                      int(max(rows[0]))+1)]
     else:
         t = datetime2float(datetimes) # this will be a float or list of floats
-    rows[1] = interpolate(x=rows[0], y=rows[1], newx=t)
+    rows[1] = interpolate(x=rows[0], y=rows[1], newx=t, verbose=verbose)
     rows[0] = t
 
-    i=1
-    while i<len(sites):
-        s,v = sites[i],values[i]
-        rows2 = byrow_key(data,name=s,yname=v,xname='datetime')
-        if len(rows2)<2: 
-            break
-        # interpolate the new data to line up in time with the original data
-        #print len(cols2[0]), len(cols2[1]),len(columns[0])
-        newrow = interpolate(rows2[0],rows2[1],t)
-        #print newrow
-        #print columns
-        rows.append(newrow)
-        #print columns
-        i += 1
+# this can never happen
+#    i=1
+#    while i<len(sites):
+#        s,v = sites[i],values[i]
+#        rows2 = byrow_key(data,name=s,yname=v,xname='datetime')
+#        if len(rows2)<2: 
+#            break
+#        # interpolate the new data to line up in time with the original data
+#        #print len(cols2[0]), len(cols2[1]),len(columns[0])
+#        newrow = interpolate(rows2[0], rows2[1], newx=t, verbose=verbose)
+#        #print newrow
+#        #print columns
+#        rows.append(newrow)
+#        #print columns
+#        i += 1
     return rows
 
 def query_data(q,filepath=None):
@@ -822,21 +833,30 @@ def bycol_key(data, name='mtgox', yname='average', xname='datetime',verbose=Fals
             #print '-------- found '+name
             keyrecord = record[name]
             #print 'keyrecord=',keyrecord
+            #print 'type(keyrecord)=',type(keyrecord)
+            #print 'size(kr)=',size(keyrecord)
             # is the requested x data name in the dictionary for the record?
             # don't create a list entry for data points unless both x and y are available
-            if xname in keyrecord and yname in keyrecord:
+            if keyrecord and xname in keyrecord and yname in keyrecord:
                 # add the time to the empty row
                 dt = datetime2float(parse_date(keyrecord[xname]))
                 value = list2float(keyrecord[yname])
                 if dt and value and MIN_ORDINAL <= dt <= MAX_ORDINAL: # dates before 1800 don't make sense
                     columns.append([dt,value])
+            else:
+                warn('The record named '+repr(name)+' of type '+repr(type(keyrecord))+' did not contain x ('+repr(xname)+') or y ('+repr(yname)+') data. Historical data file may be corrupt.')
     if verbose:
         pprint(columns,indent=2)
     return columns
 
 def byrow_key(data, name='mtgox', yname='average', xname='datetime',verbose=False):
     cols = bycol_key(data=data, name=name, yname=yname, xname=xname,verbose=verbose)
-    return(transpose_lists(cols))
+    NM = size(cols)
+    # don't try to transpose anything that isn't a list of lists
+    if (isinstance(NM,(list,tuple)) and len(NM)>1 and NM[0]>0 and NM[0]>0 
+                                    and any([n>1 for n in NM]) ): 
+        return(transpose_lists(cols))
+    else: return cols
 
 def str2float(s=''):
     """Convert value string from a webpage into a float
@@ -948,7 +968,9 @@ def lag_correlate(A,B,lead=1):
     """
     Correlate 2 data sets, lagging the data in B by 1 sample period (linear forecasting test)
 
-    Recursively handles deep (inf ;) dimensionality
+    Recursively handles deep (inf ;) dimensionality.
+    
+    Assumes that A and B contain data in rows (so they are typically wide).
 
     Even though this example works like I'd hoped indicating that lagged data
     has higher lag_correlation than unlagged (lock-step) data. But this doesn't
@@ -966,18 +988,18 @@ def lag_correlate(A,B,lead=1):
     instead of 1.0 due to division by N-1 instead of N
 
     """
-    # TODO: this is wrong, A and B could be 1-length lists and this should still work
     if isinstance(A,list) and isinstance(B,list) and len(A)>0 and len(B)>0:
         if isinstance(A[0],list) and isinstance(B[0],list):
-            Na,Ma = size(A)
-            Nb,Mb = size(B)
-            if Ma==Nb and Na==Nb and Nb != Na:
-                if   Nb > Na:
+            # so we have a list of lists (matrices), but are they the same size/shape?
+            Na,Ma = size2(A)
+            Nb,Mb = size2(B)
+            # is one the same shape as the transpose of the other
+            if Ma==Nb and Ma==Nb and Nb != Na:
+                # chose the orientation that makes them wider
+                if Mb > Ma:
                     A = transpose_lists(A)
                 else:
                     B = transpose_lists(B)
-            #A=make_wide(A)
-            #B=make_wide(B)
             C = [[0. for a in A] for b in B]
             for i,a in enumerate(A):
                 for j,b in enumerate(B):
@@ -1016,7 +1038,7 @@ def transpose_lists(lists):
     """
     NM = size(lists)
     if not isinstance(NM,(tuple,list)):
-        warn("Can't transpose a scalar!"+str(lists))
+        raise ValueError("Can't transpose a scalar!"+str(lists))
         return lists
     N=NM[0]
     M=NM[1]
@@ -1510,11 +1532,14 @@ def row_normalize(rows):
 
 def display_correlation(rows, leads, labels):
     """Print to terminal a matrix of 2-digit Pearson correlation coefficients
+    
+    Assumes rows contain time series (so the 2-D matrix is wider than it is tall)
     """
     if not rows:
         return
 
-    print leads
+    print 'leads=',leads
+    print 'rows=',rows
     leads = leads or [0]
     if isinstance(leads,(float,int)):
         if int(leads)==0: # or statement above doesn't cover 0.0 < leads < 1.0
@@ -1528,12 +1553,15 @@ def display_correlation(rows, leads, labels):
     print '-'*60
     pprint(labels,indent=2)
     print '='*60
+    print size(rows)
     for lead in leads:
         # This is the hard coded proof-of-concept forecasting algorithm
         print '*'*60
         print 'Pearson correlation coefficient(s) for a lead/lag of '+str(lead)
         print '-'*60
         C = lag_correlate(A=rows[1:],B=rows[1:],lead=lead)
+        print size(C)
+        print C
         #pprint(C,indent=2)
         for c in C:
             print '[' + ', '.join('%+0.2f' % c1 for c1 in c) + ']'
@@ -1611,17 +1639,23 @@ def print_data(data, n=-3, indent=2, pretty=True):
     else:
         print json.dumps(data[min(0,n):min(len(data),abs(n))], indent=indent)
 
-
 def test(verbose=True, internet=False):
     import doctest 
     optionflags=doctest.ELLIPSIS
+
+    print dir()
     if internet:
         doctest.testmod( verbose = verbose , optionflags=optionflags )
         doctest.testfile( 'docs/bitcrawl.rst', verbose = verbose, optionflags=optionflags)
     else:
-        testfuns = [dir()]
-        for tf in testfuns:
-            run_docstring_examples(tf,globs=None)
+        m = sys.modules.get('__main__')
+        print m
+        print m.__dict__
+        # print dir(m)
+        for tf in dir(m):
+            print tf
+            print len(dir(tf))
+            #run_docstring_examples(tf,globs=None)
 
 if __name__ == "__main__":
     import sys
@@ -1629,11 +1663,15 @@ if __name__ == "__main__":
     verbose = True
     # todo, don't check argv[0]
     for a in sys.argv:
-        al = a.lower()
-        if al.startswith('-i') or al.startswith('--i'):
+        if a.startswith('-I') or a.startswith('--I'):
+            internet == False
+        if a.startswith('-i') or a.startswith('--i'):
             internet == True
+        al = a.lower()
         if al.startswith('-q') or al.startswith('--q'):
             verbose == False
+        if al.startswith('-v') or al.startswith('--v'):
+            verbose == True
     # TODO: don't rull all tests!
     test(verbose=verbose, internet=internet)
 

@@ -131,15 +131,18 @@ if __name__ == "__main__":
     data = None
     if not o.quiet or o.verbose:
         data = bc.load_json(filepath=o.path,verbose=-2)
-
-
+    print o.graph
     sites, values, datetimes = bc.parse_query(o.graph)
+    print 'sites',sites
+    print 'values',values
     rows = bc.retrieve_data(sites,values,datetimes)
-    cols = bc.transpose_lists(rows)
+    N,M=bc.size2(rows)
+    assert N>M, size(rows)
+    #cols = bc.transpose_lists(rows)
 
     bc.display_correlation(rows=rows, leads=o.lead, labels=o.graph)
 
-    bc.plot_data(columns=cols,normalize=True)
+    #bc.plot_data(columns=cols,normalize=True)
 
     if not o.nomine:
         # mine hard-coded urls
