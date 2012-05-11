@@ -51,6 +51,7 @@ from argparse import ArgumentParser
 import re
 from warnings import warn
 import matplotlib.pyplot as plt
+from utils import size, size2, size3
 
 FILEPATH=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 MIN_ORDINAL=1800*365.25 # data associated with datetime ordinals smaller than this will be ignored
@@ -598,7 +599,7 @@ def rest_json(url='https://api.bitfloor.com/book/L2/1',verbose=False):
         data['datetime']=str(dt)
         data['url']=url
         data['len']=len(data_str)
-        # this name needs to reflext the URL specified as an input rather than a hard-coded name
+        # this name needs to reflect the URL specified as an input rather than a hard-coded name
         if verbose:
             print data
         return data
@@ -1278,157 +1279,6 @@ def unoffset(data,columns=[0]):
     warn('Unable to unoffset data of type '+str(type(data))+'.')
     return None
 
-def size_nonworking_recursive(lol):
-    """Return the maximum length of each dimension in a nested list of lists
-    
-    > > size([[range(5), [], 2, 3],[4, 5]]):
-    [2, [4, [5, 1]]]
-    > > size([1]):
-    [1,[]]
-    """
-    if isinstance(lol,(list,set,tuple)):
-        szs = [size(L) for L in lol]
-        sz=max[len(lol)]
-        print 'top D with len ',len(lol)
-        sz2 = -1
-        for L in lol:
-            print 'inner D'
-            if isinstance(L,(list,set,tuple)):
-                print 'inner D has a list'
-                sz3 = size(L)
-                if isinstance(sz3,list) and len(sz3)>0:
-                    x=sz3[-1]
-                else:
-                    x = sz3
-                print 'returned size is',sz3
-                print 'last returned size is',x
-            elif isinstance(L,type(None)):
-                print 'inner D has a None'
-                x = -1
-            else:
-                print 'inner D has a non-List non-None'
-                x = 0
-            sz2 = max(sz2,x)
-            print 'inner max is',sz2
-        print 'max of all innner D is',sz2
-        print 'sz from earlier is',sz
-        if sz2>0:
-            print 'creating a new list and appending max size ',sz,'to',sz2
-            sz.append(sz2)
-            return sz
-        elif sz2<=0:
-            print 'returning the len of this innermost dimension',len(lol),'to',sz
-            return len(lol)
-        # TODO: decide what the dimension of a list of Nones is, zero?
-    elif isinstance(lol,type(None)):
-        return([-1])
-    else:
-        return([+1])
-
-def size3(lol):
-    """Return the maximum length of each of 3 dimensions in a list of lists of lists
-    
-    >>> size([range(3),range(4)]):
-    (2, 4)
-    >>> size(range(3)):
-    (3)
-    >>> size(100):
-    0
-    >>> size([[range(4),range(5),range(6)],range(2),range(7)])
-    (3, 7, 6)
-    """
-    L0,L1,L2 = -1,-1,-1
-    if isinstance(lol,(list,set,tuple)):
-        L0=len(lol)
-        for D1 in lol:
-            if isinstance(D1,(list,set,tuple)):
-                L1 = max(len(D1),L1)
-                for D2 in D1:
-                    if isinstance(D2,(list,set,tuple)):
-                        L2 = max(len(D2),L2)
-                    else:
-                        L2 = max(0,L2)
-            else:
-                L1 = max(0,L1)
-        if L2>0:
-            return (L0,L1,L2)
-        elif L1>0:
-            return (L0,L1)
-        return (L0)
-    elif isinstance(lol,type(None)):
-        return None # NaN (0-Dimensional
-    else:
-        return 0 # scalar = 0-dimensional
-
-def size2(x, errors=True, verbose=True):
-    """Return a tuple of 2 dimensions regardless of the size of the lists in x.
-    
-    >>> size2([[1,2,3],[4,5]])
-    (2, 3)
-    >>> size2([[[[0,1],[2,3]],[4,5]],[6,7,8,9]], verbose=False, errors=True)
-    (2, 4)
-    >>> size2([[[[0,1],[2,3]],[4,5]],[6,7,8,9]], verbose=True, errors=True)
-    bitcrawl.py:...: UserWarning: Nested iterable contained more than 2 dimensions but only 2 requested. Size: (2, 4, 2)
-      warn("Nested iterable contained more than 2 dimensions but only 2 requested. Size: "+str(NM))
-    (2, 4)
-    >>> size2([1,2,3], verbose=False, errors=False)
-    (3, 0)
-    >>> size2([1,2,3], verbose=False, errors=True)
-    Traceback (most recent call last):
-        ...
-    ValueError: Nested iterable contained less than 2 dimensions. Size: 3
-    """
-    NM = size(x)
-    print 'size(NM)',NM
-    D = 1
-    try:
-        D = len(NM)
-        print 'D',D
-    except TypeError:
-        pass
-    if D==2:
-        return NM[0], NM[1]
-    if D>2:
-        if verbose:
-            warn("Nested iterable contained more than 2 dimensions but only 2 requested. Size: "+str(NM))
-        return NM[0], NM[1]
-    if D<2:
-        if errors:
-            raise ValueError("Nested iterable contained less than 2 dimensions. Size: "+str(NM))
-        elif verbose:
-            warn("Nested iterable contained less than 2 dimensions and 2 requested. Size: "+str(NM))
-    if D==1:
-        return NM, 0
-    return 0, 0
-
-def size3(x, errors=True, verbose=True):
-    """Return a tuple of 3 dimensions regardless of the size of the lists in x.
-    """
-    NM = size(x)
-    D = 1
-    try:
-        D = len(NM)
-    except TypeError:
-        pass
-    if D==3:
-        return NM[0], NM[1], NM[2]
-    elif D>3:
-        if verbose:
-            warn("Nested iterable contained more than 3 dimensions but only 3 requested. Size: "+str(NM))
-        return NM[0], NM[1], NM[2]
-    elif D<3:
-        if errors:
-            raise ValueError("Nested iterable contained less than 3 dimensions. Size: "+str(NM))
-        elif verbose:
-            warn("Nested iterable contained less than 3 dimensions and 3 requested. Size: "+str(NM))
-    if D==2:
-        return NM[0], NM[1], 0
-    elif D==1:
-        return NM, 0, 0
-    return 0, 0, 0
-
-        
-    
 def mean(lol): 
     """
     Compute mean (expected value, or average) of columns (or rows, if rows longer).

@@ -586,11 +586,82 @@ def size(lol,d=None):
         d=list()
     if isinstance(d,tuple):
         d=list(d)
-    if lol and isinstance(lol, collections.Iterable):
+    if lol and isinstance(lol, collections.Iterable) and not isinstance(lol, basestring):
         d.append(len(lol))
-        if lol[0] and isinstance(lol[0],collections.Iterable):
+        if lol[0] and isinstance(lol[0],collections.Iterable) and not isinstance(lol[0], basestring):
+             # need some flag to indicate when all elements have been sized,
+             #  creating a list of list of sizes that is 1 less dimension than the actual
+             #  dimension of the multi-d list of values, then walk it, finding the maxes
+             # for each dimension
             d.extend(size(lol[0],None))
     return tuple(d)
+
+def size2(x, errors=True, verbose=True):
+    """Return a tuple of 2 dimensions regardless of the size of the lists in x.
+    
+    >>> size2([[1,2,3],[4,5]])
+    (2, 3)
+    >>> size2([[[[0,1],[2,3]],[4,5]],[6,7,8,9]], verbose=False, errors=True)
+    (2, 4)
+    >>> size2([[[[0,1],[2,3]],[4,5]],[6,7,8,9]], verbose=True, errors=True)
+    bitcrawl.py:...: UserWarning: Nested iterable contained more than 2 dimensions but only 2 requested. Size: (2, 4, 2)
+      warn("Nested iterable contained more than 2 dimensions but only 2 requested. Size: "+str(NM))
+    (2, 4)
+    >>> size2([1,2,3], verbose=False, errors=False)
+    (3, 0)
+    >>> size2([1,2,3], verbose=False, errors=True)
+    Traceback (most recent call last):
+        ...
+    ValueError: Nested iterable contained less than 2 dimensions. Size: 3
+    """
+    NM = size(x)
+    print 'size(NM)',NM
+    D = 1
+    try:
+        D = len(NM)
+        print 'D',D
+    except TypeError:
+        pass
+    if D==2:
+        return NM[0], NM[1]
+    if D>2:
+        if verbose:
+            warn("Nested iterable contained more than 2 dimensions but only 2 requested. Size: "+str(NM))
+        return NM[0], NM[1]
+    if D<2:
+        if errors:
+            raise ValueError("Nested iterable contained less than 2 dimensions. Size: "+str(NM))
+        elif verbose:
+            warn("Nested iterable contained less than 2 dimensions and 2 requested. Size: "+str(NM))
+    if D==1:
+        return NM, 0
+    return 0, 0
+
+def size3(x, errors=True, verbose=True):
+    """Return a tuple of 3 dimensions regardless of the size of the lists in x.
+    """
+    NM = size(x)
+    D = 1
+    try:
+        D = len(NM)
+    except TypeError:
+        pass
+    if D==3:
+        return NM[0], NM[1], NM[2]
+    elif D>3:
+        if verbose:
+            warn("Nested iterable contained more than 3 dimensions but only 3 requested. Size: "+str(NM))
+        return NM[0], NM[1], NM[2]
+    elif D<3:
+        if errors:
+            raise ValueError("Nested iterable contained less than 3 dimensions. Size: "+str(NM))
+        elif verbose:
+            warn("Nested iterable contained less than 3 dimensions and 3 requested. Size: "+str(NM))
+    if D==2:
+        return NM[0], NM[1], 0
+    elif D==1:
+        return NM, 0, 0
+    return 0, 0, 0
 
 
 ## Django project settings loader
@@ -772,19 +843,6 @@ def merge_iter( new, old, allcaps=True, doubleunderscore=False, verbose=2, overw
     # FIXME: mismatched schemas (new and old elements not the same type and structure) may result in no change
     #print 'returning value '+repr(old)
     return old
- 
 
-## TODO: there should be a clever way to do this with a recursive function and a static variable to hold the accumulated list of dimensions
-#def __size__(x): 
-#  l = nlp.has_len(x)
-#  TG_NLP_SIZE_DIMENSION_LIST[-1]=max(TG_NLP_SIZE_DIMENSION_LIST[-1],l)
-#  
-#  for x0 in x:
-#    l=max(nlp.has_len(x),l)
-#  
-#def size(x):
-#  """Calculate the shape (size) of a multi-dimensional list"""
-#  HL_SIZE_DIMENSION_LIST = [0] # reset the dimension list
-#  return __size__(x)
 
 

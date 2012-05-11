@@ -42,6 +42,7 @@
     :license:   Creative Commons BY-NC-SA, see LICENSE for details"""
 
 import bitcrawl as bc
+from utils import size, size2, size3
 from pprint import pprint
 from argparse import ArgumentParser
 from warnings import warn
@@ -73,7 +74,7 @@ def parse_args():
     p.add_argument(
         '-g','--graph','--plot',
         nargs = '*',
-        default = ['mtgox.average', 'mtgox.last', 'shop.visits','bitcoin.visits','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin'],
+        default = ['mtgox.average','wikipedia_view_rate_Bitcoin.view_rate_Bitcoin'],
         help    = 'List of values to plot.',
         )
     p.add_argument(
@@ -136,8 +137,8 @@ if __name__ == "__main__":
     print 'sites',sites
     print 'values',values
     rows = bc.retrieve_data(sites,values,datetimes)
-    N,M=bc.size2(rows)
-    assert N>M, size(rows)
+    NM  = size(rows)
+    assert NM[1]>=NM[0], size(rows)
     #cols = bc.transpose_lists(rows)
 
     bc.display_correlation(rows=rows, leads=o.lead, labels=o.graph)
