@@ -14,6 +14,7 @@ import os
 import re
 import sys
 from warnings import warn
+import collections # .Iterable
 
 # TODO: don't read the whole file into memory and write.
 # TODO: DRY-up using replace_in_file
@@ -519,7 +520,7 @@ def sign(f):
 def make_same_type_as(obj1,obj2):
   return type(obj2)(obj1)
 
-import collections
+
 # accepted answer http://stackoverflow.com/questions/2158395/flatten-an-irregular-list-of-lists-in-python/2158532#215853
 def flatten(list_o_lists):
     """Flatten all dimensions of a multi-dimensional iterable (list/array, tuple, dict, etc) to 1-D, except for member strings.
@@ -537,11 +538,60 @@ def flatten(list_o_lists):
                 yield subel
         else:
             yield el
+            
+def flattrans(list_o_lists):
+    """Flatten by 1 dimension and transpose 1st 2 dimensions of a multi-dimensional iterable (list/array, tuple, dict, etc) to N-1-D, where N is the dimension of the list_o_lists.
+
+    >>> l1 = list(flatten(UNIT_CONVERSIONS))
+    >>> [(s in l1) for s in ('inches','m','furlongs','stone')]
+    [True, True, False, False]
+    """
+    if isinstance(list_o_lists, collections.Iterable) and not isinstance(list_o_lists, basestring):
+        if isinstance(list_o_lists[0], collections.Iterable) and not isinstance(list_o_lists[0], basestring):
+            for j in range(len(list_o_lists[0])):
+                for i in range(len(list_o_lists)):
+                    yield list_o_lists[i][j]
+        else:
+            for i in range(len(list_o_lists)):
+                 yield list_o_lists[i]
+    else:
+        yield list_o_lists
 
 # more complicated "flatten", but effective answer (doesn't seem like it would work for other iterables like dict and set, but seems to
 # http://stackoverflow.com/questions/2158395/flatten-an-irregular-list-of-lists-in-python/2158532#215853
 flatten_lists = lambda *n: (e for a in n
-    for e in (flatten(*a) if isinstance(a, (tuple, list)) else (a,)))
+    for e in (flatten_lists(*a) if isinstance(a, (tuple, list)) else (a,)))
+
+# FIXME: NOT_IMPLEMENTED
+def deep_flatten(list_o_lists):
+    f = [x for x in flatten(list_o_lists)]
+
+def size(lol,d=None):
+    """List the lengths of the first element in each dimension of a multi-dimensional list
+    
+    TODO: calculate the maximum lengths for jagged lists of lists
+    
+    >>> size([range(3),range(4)]):
+    (2, 4)
+    >>> size(range(3)):
+    (3)
+    >>> size(100):
+    0
+    >>> size([[range(4),range(5),range(6)],range(2),range(7)])
+    (3, 7, 6)
+    >>> u.size([[[range(2)]*3]*4]*6)
+    (6, 4, 3, 2)
+    """
+    if not d:
+        d=list()
+    if isinstance(d,tuple):
+        d=list(d)
+    if lol and isinstance(lol, collections.Iterable):
+        d.append(len(lol))
+        if lol[0] and isinstance(lol[0],collections.Iterable):
+            d.extend(size(lol[0],None))
+    return tuple(d)
+
 
 ## Django project settings loader
 #import os

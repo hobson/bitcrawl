@@ -427,15 +427,26 @@ def interpolate(x,y,newx=None,method='linear',verbose=True):
     # TODO: walk the dimensions of the lists, doing a size() to find which 
     #       dimensions correspond  (x <--> y) so that the interpolation vector
     #       lengths match
-    if isinstance(x[0],(float,int,str)) and isinstance(y[0],(list,tuple)) and len(x)==len(y):
-#        if verbose:
-#            warn('You provided a list of y values and a scalar x to interpolate to
-        #raise ValueError('interpolate() is only designed to handle a pair of lists or a list and a list of lists. size(x)='+repr(size(x))+'  size(y)='+repr(size(y))+'size(newx)='+repr(size(newx)))
-        y2 = transpose_lists(y)
+    N = len(x)
+    if not len(y) == N:
+        raise ValueError('Interpolated lists must be the same length, even if the dependent variable (y) has more dimensions')
+    newy = []
+    if isinstance(x[0],(float,int,str)) and isinstance(y[0],(list,tuple)):
         if verbose:
             print 'interpolate() is trying for size(x)='+repr(size(x))+'  size(y)='+repr(size(y2))+'size(newx)='+repr(size(newx))
-
-        return [ interpolate(x,y1,newx,method,verbose=verbose) for y1 in y2 ]
+        x2 = []
+        for j in range(len(y[0])):
+            x2 += []
+            for i,x2 in enumerate(x):
+                x2[i][j] = x
+        return interpolate(x2,y,newx,method,verbose) # FIXME: doesn't work for 2-D y and 1-D x
+        for j in range(len(y[0])):
+            y1=[]
+            for i in range(len(y)):
+                if j<len(y[i]):
+                    y1 += y[i][j]
+            newy += interpolate(x=x,y=y1,newx=newx,method=method,verbose=verbose)
+        return newy
     elif isinstance(x[0],(list,tuple)) and isinstance(y[0],(list,tuple)):
         # TODO: check the length of x[0] and y[0] to see which dimension in y corresponds to x
         return [ interpolate(x1,y1,newx,method,verbose=verbose) for x1,y1 in zip(x,y) ]
@@ -447,11 +458,9 @@ def interpolate(x,y,newx=None,method='linear',verbose=True):
         newx = [float(x1*(x[-1]-x[0]))/(N-1)+x[0] for x1 in range(len(x))]
     #if newx and len(newx)>1:
         #print make_wide(newx)
-    newy=[]
     N=len(newx)
     if not len(x)==len(y):
         raise ValueError("Can't interpolate() for size(x)="+repr(size(x))+'  size(y)='+repr(size(y))+'size(newx)='+repr(size(newx)))
-
     if method.lower().startswith('lin'):
         i, j, x0, y0 = 0, 0, newx[0], y[0]
         while i < len(x) and j<N:
@@ -1316,7 +1325,7 @@ def size_nonworking_recursive(lol):
     else:
         return([+1])
 
-def size(lol):
+def size3(lol):
     """Return the maximum length of each of 3 dimensions in a list of lists of lists
     
     >>> size([range(3),range(4)]):
