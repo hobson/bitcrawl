@@ -29,6 +29,8 @@
        b) write a browser plugin that allows a human to supervise the machine learning and identify useful/relevant quantitative data
     5. implement the indexer and search engine for the double-star question 3 in CS101 and get quant data directly from the index
     6. implement the levetshire distance algorithm from the CS101 exam for use in word-stemming and search term similarity estimate
+    7. record response time of web pages as one of the stats associated with each url
+    8. use historical load-time data to prioritize quickly-loading pages over defunt, slow pages (like bitcoinsonsultancy.com)
 
     :copyright: 2012 by Hobson Lane (hobson@totalgood.com), see AUTHORS for details
     :license:   Creative Commons BY-NC-SA, see LICENSE for more details
@@ -98,12 +100,13 @@ URLs={'network':
         'url': 'https://en.bitcoin.it/wiki/Main_Page',
         'visits':
             [r'has\sbeen\saccessed\s',
-             r'([0-9]{1,3}[,]?){1,4}'  ] }, 
-    'consultancy': {
-        'url': 'https://bitcoinconsultancy.com/wiki/Main_Page',
-        'visits':
-            [r'has\sbeen\saccessed\s',
-             r'([0-9]{1,3}[,]?){1,4}'  ] }, 
+             r'([0-9]{1,3}[,]?){1,4}'  ] },
+# went "offline" sometime around May 20th
+#    'consultancy': {
+#        'url': 'https://bitcoinconsultancy.com/wiki/Main_Page',
+#        'visits':
+#            [r'has\sbeen\saccessed\s',
+#             r'([0-9]{1,3}[,]?){1,4}'  ] }, 
     'mtgox':    {
         'url': 'https://mtgox.com',
         'average':
