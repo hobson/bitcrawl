@@ -567,9 +567,14 @@ def deep_flatten(list_o_lists):
     f = [x for x in flatten(list_o_lists)]
 
 def size(lol,d=None):
-    """List the lengths of the first element in each dimension of a multi-dimensional list
+    """List lengths of first elements for each dimension of a multi-D Iterable
     
-    TODO: calculate the maximum lengths for jagged lists of lists
+    Second optional argument, `d`, is a list of dimensions that is appended and returned.
+    Should be a hidden, system parameter, not a user argument. It's just used to make this function
+    work recursively on deep multi-dimensional collections.Iterables
+    
+    TODO: calculate the maximum lengths for jagged lists of lists rather than the
+          length of the first element
     
     >>> size([range(3),range(4)]):
     (2, 4)
@@ -582,16 +587,17 @@ def size(lol,d=None):
     >>> u.size([[[range(2)]*3]*4]*6)
     (6, 4, 3, 2)
     """
-    if not d:
-        d=list()
-    if isinstance(d,tuple):
-        d=list(d)
+    
+    # initialize the result if this is the first time this recursive function has been called
+    if not d:                d=list()
+    if isinstance(d,tuple):  d=list(d)
+
     if lol and isinstance(lol, collections.Iterable) and not isinstance(lol, basestring):
         d.append(len(lol))
         if lol[0] and isinstance(lol[0],collections.Iterable) and not isinstance(lol[0], basestring):
              # need some flag to indicate when all elements have been sized,
              #  creating a list of list of sizes that is 1 less dimension than the actual
-             #  dimension of the multi-d list of values, then walk it, finding the maxes
+             #  dimension of the multi-D list of values, then walk it, finding the maxes
              # for each dimension
             d.extend(size(lol[0],None))
     return tuple(d)

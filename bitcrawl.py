@@ -52,6 +52,7 @@ import re
 from warnings import warn
 import matplotlib.pyplot as plt
 from utils import size, size2, size3
+import collections # .Iterable
 
 FILEPATH=os.path.expanduser('data/bitcrawl_historical_data.json') # change this to a path you'd like to use to store data
 MIN_ORDINAL=1800*365.25 # data associated with datetime ordinals smaller than this will be ignored
@@ -446,7 +447,7 @@ def interpolate(x,y,newx=None,method='linear',verbose=True):
             for i in range(len(y)):
                 if j<len(y[i]):
                     y1 += y[i][j]
-            newy += interpolate(x=x,y=y1,newx=newx,method=method,verbose=verbose)
+            newy += interpolate(x=x, y=y1, newx=newx, method=method, verbose=verbose)
         return newy
     elif isinstance(x[0],(list,tuple)) and isinstance(y[0],(list,tuple)):
         # TODO: check the length of x[0] and y[0] to see which dimension in y corresponds to x
@@ -974,11 +975,11 @@ def pearson(A,B):
     return cov(A,B)/std(A)/std(B)
 
 
-def lag_correlate(A,B,lead=1):
+def lag_correlate(rows, lead=1, verbose=True):
     """
-    Correlate 2 data sets, lagging the data in B by 1 sample period (linear forecasting test)
+    Correlate 2 data sets, lagging the data in B by N sample periods
 
-    Recursively handles deep (inf ;) dimensionality.
+    Recursively handles deep dimensionality.
     
     Assumes that A and B contain data in rows (so they are typically wide).
 
@@ -987,9 +988,9 @@ def lag_correlate(A,B,lead=1):
     appear to be true generally. So this approach may be misguided.
 
     Examples:
-    >>> lag_correlate([1,2,3,2,1,2,3,2,1],[1,2,3,2,1,2,3,2,1],lead=1)
+    >>> lag_correlate([[1,2,3,2,1,2,3,2,1],[1,2,3,2,1,2,3,2,1]],lead=1)
     0.0
-    >>> lag_correlate([1,2,3,2,1,2,3,2,1],[2,3,2,1,2,3,2,1,2],lead=1)
+    >>> lag_correlate([[1,2,3,2,1,2,3,2,1],[2,3,2,1,2,3,2,1,2]],lead=1)
     0.9999999999999999
 
     Note:
@@ -998,31 +999,36 @@ def lag_correlate(A,B,lead=1):
     instead of 1.0 due to division by N-1 instead of N
 
     """
-    if isinstance(A,list) and isinstance(B,list) and len(A)>0 and len(B)>0:
-        if isinstance(A[0],list) and isinstance(B[0],list):
-            # so we have a list of lists (matrices), but are they the same size/shape?
-            Na,Ma = size2(A)
-            Nb,Mb = size2(B)
-            # is one the same shape as the transpose of the other
-            if Ma==Nb and Ma==Nb and Nb != Na:
-                # chose the orientation that makes them wider
-                if Mb > Ma:
-                    A = transpose_lists(A)
-                else:
-                    B = transpose_lists(B)
-            C = [[0. for a in A] for b in B]
-            for i,a in enumerate(A):
-                for j,b in enumerate(B):
-                    C[i][j]=lag_correlate(a,b,lead)
-            return C
-        L = int(lead)
-        if   lead>0:
-            return pearson(A[L: ],B[  :-L])
-        elif lead<0:
-            return pearson(A[ :L],B[-L:  ])
-        else:
-            return pearson(A     ,B       )
-    return None
+    if not isinstance(rows,collections.Iterable): 
+        raise ValueError('Cannot calculate the correlation coefficient for a scalar (non-iterable)')
+    NM = size(rows)
+    # for a 3-D matrix you need a 3-D correlation matrix
+    # FIXME:
+    if NM[-1]>2 and len(NM)==3 and NM[-2]==2:
+        C = [[0. for a in rows] for b in rows[0]]
+        for i,AA in enumerate(rows):
+            for j,BB in enumerate(rows):
+                C[i][j]=lag_correlate([AA[1],BB[1]],lead=lead,verbose=verbose)
+        return C
+    
+    if 2 == len(NM) and 2 == NM[0] and 2 < NM[1]:
+        A = rows[0]
+        B = rows[1]
+    elif 1 == len(NM) and 2 < NM[0]:
+        A = rows # autocorolation for a single timeseries (single list, array, vector)
+        B = rows
+    else:
+        raise ValueError('Not sure what do do to calculate the correlation for the rows of a matrix of size '+str(NM))
+    L = int(lead)
+    if   L>0:
+        c = pearson(A[L: ],B[  :-L])
+    elif L<0:
+        c = pearson(A[ :L],B[-L:  ])
+    else:
+        c = pearson(A     ,B       )
+    if verbose>2:
+        print 'Returning a Pearson correlation coefficient in lag_correlate: '+repr(c)
+    return c # return a scalar if 2 timeseries were provided
 
 def combo_correlate(A,B):
     """Correlate every row in A with every row in B
@@ -1389,19 +1395,21 @@ def row_normalize(rows):
             rows[i][j] = float(el-minr[i])/sf[i]
     return rows,minr,sf # return enough data to recover the original
 
-def display_correlation(rows, leads, labels):
-    """Print to terminal a matrix of 2-digit Pearson correlation coefficients
+def display_correlation(rows, labels, leads=[0,1], verbose=False):
+    """Print to terminal a matrix of Pearson correlation coefficients
     
     Assumes rows contain time series (so the 2-D matrix is wider than it is tall)
+    First row is time (independent variable)
+    Second row is one of the dependent variables
+    
     """
     if not rows:
         return
-
     print 'leads=',leads
     print 'rows=',rows
     leads = leads or [0]
     if isinstance(leads,(float,int)):
-        if int(leads)==0: # or statement above doesn't cover 0.0 < leads < 1.0
+        if int(leads)==0:
             leads = [0]
         if leads>0:
             leads = range(min(int(leads)+1, 10))
@@ -1413,15 +1421,20 @@ def display_correlation(rows, leads, labels):
     pprint(labels,indent=2)
     print '='*60
     print size(rows)
+    NM = size(rows)
+    #assert len(NM)==2
+    assert NM[-2]==2 # each time series is 2 rows of data [time, value]
+    assert NM[-1]>2 # time series must be in rows of the inner dimension
+    assert len(NM)==3 # must be 3-D, a list of 2-D time series
     for lead in leads:
-        # This is the hard coded proof-of-concept forecasting algorithm
+        # This is the hard-coded proof-of-concept forecasting algorithm
         print '*'*60
         print 'Pearson correlation coefficient(s) for a lead/lag of '+str(lead)
         print '-'*60
-        C = lag_correlate(A=rows[1:],B=rows[1:],lead=lead)
-        print size(C)
-        print C
-        #pprint(C,indent=2)
+        C = lag_correlate(rows=rows,lead=lead)
+        if verbose>2:
+            print 'size of correlation matrix: '+repr(size(C))
+            print 'correlation matrix (C)=     '+repr(C)
         for c in C:
             print '[' + ', '.join('%+0.2f' % c1 for c1 in c) + ']'
         #TODO calculate for all paramters and find the maximum

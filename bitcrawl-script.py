@@ -141,7 +141,7 @@ if __name__ == "__main__":
     assert NM[1]>=NM[0], size(rows)
     #cols = bc.transpose_lists(rows)
 
-    bc.display_correlation(rows=rows, leads=o.lead, labels=o.graph)
+    bc.display_correlation(rows=rows, labels=o.graph, leads=o.lead)
 
     #bc.plot_data(columns=cols,normalize=True)
 
