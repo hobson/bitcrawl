@@ -32,6 +32,7 @@
     7. record response time of web pages as one of the stats associated with each url
     8. use historical load-time data to prioritize quickly-loading pages over defunt, slow pages (like bitcoinsonsultancy.com)
 
+    :author: Hobson Lane dba TotalGood
     :copyright: 2012 by Hobson Lane (hobson@totalgood.com), see AUTHORS for details
     :license:   Creative Commons BY-NC-SA, see LICENSE for more details
 """
@@ -229,6 +230,7 @@ class Bot:
         delay = min(max(delay,0.1),3600)
         file_object, datastr = None, ''
         try:
+            print 'opening ', url
             file_object = self.opener.open(url)
         # build_opener object doesn't handle 404 errors, etc !!! 
         # TODO: put all these error handlers into our Bot class

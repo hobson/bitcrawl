@@ -1,0 +1,66 @@
+Have a non-directory at the top, so creating directory top_dir
+Adding /home/hobs/src/bitcrawl/./AUTHORS to top_dir
+Adding /home/hobs/src/bitcrawl/./AUTHORS~ to top_dir
+Adding /home/hobs/src/bitcrawl/./LICENSE to top_dir
+Adding /home/hobs/src/bitcrawl/./LICENSE.html to top_dir
+Adding /home/hobs/src/bitcrawl/./LICENSE.html~ to top_dir
+Adding /home/hobs/src/bitcrawl/./LICENSE~ to top_dir
+Adding /home/hobs/src/bitcrawl/./README to top_dir
+Creating filelist for api
+Adding /home/hobs/src/bitcrawl/./api_mtgox.py to top_dir
+Adding /home/hobs/src/bitcrawl/./api_mtgox.pyc to top_dir
+Adding /home/hobs/src/bitcrawl/./api_mtgox.py~ to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl-script.py to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl-script.py~ to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl.py to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl.pyc to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl.py~ to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl.rst~ to top_dir
+Adding /home/hobs/src/bitcrawl/./bitcrawl.slocs to top_dir
+Adding /home/hobs/src/bitcrawl/./bitpart_alpha.zip to top_dir
+Creating filelist for data
+Creating filelist for docs
+Adding /home/hobs/src/bitcrawl/./icon.png to top_dir
+Adding /home/hobs/src/bitcrawl/./read-json.py to top_dir
+Adding /home/hobs/src/bitcrawl/./tester.py to top_dir
+Adding /home/hobs/src/bitcrawl/./tester.py~ to top_dir
+Adding /home/hobs/src/bitcrawl/./tz.py to top_dir
+Adding /home/hobs/src/bitcrawl/./tz.pyc to top_dir
+Adding /home/hobs/src/bitcrawl/./utils.py to top_dir
+Adding /home/hobs/src/bitcrawl/./utils.pyc to top_dir
+Adding /home/hobs/src/bitcrawl/./utils.py~ to top_dir
+Adding /home/hobs/src/bitcrawl/./word_histogram.py to top_dir
+Categorizing files.
+Finding a working MD5 command....
+Found a working MD5 command.
+Computing results.
+
+
+SLOC	Directory	SLOC-by-Language (Sorted)
+3515    top_dir         python=3515
+55      api             python=55
+0       data            (none)
+0       docs            (none)
+
+
+Totals grouped by language (dominant language first):
+python:        3570 (100.00%)
+
+
+
+
+Total Physical Source Lines of Code (SLOC)                = 3,570
+Development Effort Estimate, Person-Years (Person-Months) = 0.76 (9.13)
+ (Basic COCOMO model, Person-Months = 2.4 * (KSLOC**1.05))
+Schedule Estimate, Years (Months)                         = 0.48 (5.79)
+ (Basic COCOMO model, Months = 2.5 * (person-months**0.38))
+Estimated Average Number of Developers (Effort/Schedule)  = 1.58
+Total Estimated Cost to Develop                           = $ 102,788
+ (average salary = $56,286/year, overhead = 2.40).
+SLOCCount, Copyright (C) 2001-2004 David A. Wheeler
+SLOCCount is Open Source Software/Free Software, licensed under the GNU GPL.
+SLOCCount comes with ABSOLUTELY NO WARRANTY, and you are welcome to
+redistribute it under certain conditions as specified by the GNU GPL license;
+see the documentation for details.
+Please credit this data as "generated using David A. Wheeler's 'SLOCCount'."
