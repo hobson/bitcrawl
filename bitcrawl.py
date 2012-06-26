@@ -221,16 +221,33 @@ class Bot:
         self.response    = ''
         self.params      = ''
         self.url         = ''
-        redirecter  = urllib2.HTTPRedirectHandler()
-        cookies     = urllib2.HTTPCookieProcessor()
-        self.opener = urllib2.build_opener(redirecter, cookies)
+
+# TODO: implement getter/setters for username and password to get past paywalls
+#        # Create an OpenerDirector with support for Basic HTTP Authentication...
+#        auth_handler = urllib2.HTTPBasicAuthHandler()
+#        auth_handler.add_password(realm='PDQ Application',
+#                                  uri='https://mahler:8092/site-updates.py',
+#                                  user='klem',
+#                                  passwd='kadidd!ehopper')
+#        opener = urllib2.build_opener(auth_handler)
+#        # ...and install it globally so it can be used with urlopen.
+#        urllib2.install_opener(opener)
+#        urllib2.urlopen('http://www.example.com/login.html')
+
+        self.redirecter  = urllib2.HTTPRedirectHandler()
+        self.cookies     = urllib2.HTTPCookieProcessor()
+        self.opener = urllib2.build_opener(self.redirecter, self.cookies)
+        # replace the default urllib2 user-agent
+        self.opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+
     def GET(self, url, retries=2, delay=2, len=1e7):
+        # FIXME: doesn't work on no HTTPS urls!!
         self.retries = max(self.retries, retries)
         # don't wait less than 0.1 s or longer than 1 hr when retrying a network connection
         delay = min(max(delay,0.1),3600)
         file_object, datastr = None, ''
         try:
-            print 'opening ', url
+            #print 'opening ', url
             file_object = self.opener.open(url)
         # build_opener object doesn't handle 404 errors, etc !!! 
         # TODO: put all these error handlers into our Bot class
