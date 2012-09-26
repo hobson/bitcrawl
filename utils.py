@@ -540,7 +540,7 @@ def flatten(list_o_lists):
             yield el
             
 def flattrans(list_o_lists):
-    """Flatten by 1 dimension and transpose 1st 2 dimensions of a multi-dimensional iterable (list/array, tuple, dict, etc) to N-1-D, where N is the dimension of the list_o_lists.
+    """Flatten by 1 dimension and transpose 1st two dims of a multi-dim iterable (list/array, tuple, dict) to N-1-D, where N is the dimension of the list_o_lists.
 
     >>> l1 = list(flatten(UNIT_CONVERSIONS))
     >>> [(s in l1) for s in ('inches','m','furlongs','stone')]
@@ -557,7 +557,7 @@ def flattrans(list_o_lists):
     else:
         yield list_o_lists
 
-# more complicated "flatten", but effective answer (doesn't seem like it would work for other iterables like dict and set, but seems to
+# more complicated "flatten", but effective answer (doesn't seem like it should work for other iterables like dict and set, but does
 # http://stackoverflow.com/questions/2158395/flatten-an-irregular-list-of-lists-in-python/2158532#215853
 flatten_lists = lambda *n: (e for a in n
     for e in (flatten_lists(*a) if isinstance(a, (tuple, list)) else (a,)))
